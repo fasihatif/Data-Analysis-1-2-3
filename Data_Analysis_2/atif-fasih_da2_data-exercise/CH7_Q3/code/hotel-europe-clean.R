@@ -10,8 +10,6 @@
 
 #############################################
 
-dir <- 'C:/Users/abc/OneDrive/Business_Analytics/Data-Analysis-1-2-3/Data_Analysis_2/atif-fasih_da2_data-exercise/CH7_Q3/data'
-
 # PACKAGES
 library(dplyr)
 library(tidyverse)
@@ -21,7 +19,12 @@ library(tidyverse)
 # variables downoaded as string, often in form that is not helpful
 # need to transform then to numbers that we can use
 
-df <- read_csv(paste0(dir,"/raw/hotelbookingdata.csv"))
+#dir <- 'C:/Users/abc/OneDrive/Business_Analytics/Data-Analysis-1-2-3/Data_Analysis_2/atif-fasih_da2_data-exercise/CH7_Q3/data'
+#df <- read_csv(paste0(dir,"/raw/hotelbookingdata.csv"))
+
+my_url_raw <- "https://raw.githubusercontent.com/fasihatif/Data-Analysis-1-2-3/master/Data_Analysis_2/atif-fasih_da2_data-exercise/CH7_Q3/data/raw/hotelbookingdata.csv"
+df <- read_csv( my_url_raw )
+
 
 # generate numerical variable of rating variable from string variable
 #  trick: remove non-numeric characters using regex

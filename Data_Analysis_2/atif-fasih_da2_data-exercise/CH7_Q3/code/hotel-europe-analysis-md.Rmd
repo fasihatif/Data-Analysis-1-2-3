@@ -1,0 +1,122 @@
+---
+title: "Data Exericse CH7 Q3"
+author: "Fasih Atif"
+date: "12/2/2020"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r,include = FALSE}
+# Install libraries
+library(tidyverse)
+library(ggthemes)
+```
+
+```{r, include = FALSE}
+# Load data
+#dir <- 'C:/Users/abc/OneDrive/Business_Analytics/Data-Analysis-1-2-3/Data_Analysis_2/atif-fasih_da2_data-exercise/CH7_Q3/data'
+#df <- read_csv(paste0(dir,"/clean/hotels-europe_clean.csv"))
+
+my_url_clean <- "https://raw.githubusercontent.com/fasihatif/Data-Analysis-1-2-3/master/Data_Analysis_2/atif-fasih_da2_data-exercise/CH7_Q3/data/clean/hotels-europe_clean.csv"
+df <- read_csv( my_url_clean )
+```
+
+```{r, include = FALSE}
+# Filter data for hotels from another European city such as Budapest for a November 2017 weekday with 3.0 - 4.0 stars
+df_ams_filter <- df %>% filter(city_actual == "Amsterdam" &
+                                accommodation_type == "Hotel" &
+                                year == 2017 &
+                                month == 11 & 
+                                weekend == 0 & 
+                                stars %in% c(3.0,3.5,4.0))
+
+# Select relevant columns
+df_ams <- df_ams_filter %>% select(city_actual,price,distance,stars)
+
+
+```
+
+**Introduction**
+
+Our task is to analyze the hotel price-distance to the center pattern for another city and compare it to hotels in Austria. We will keep hotels with 3 to 4 stars for a November 2017 weekday. The city that i chose to compare with Austria is Amsterdam, Netherlands.
+
+**Examining the distribution of the distance variable**
+
+We visualize the distribution of distance of hotels in Amsterdam and observe that majority of the hotels for the criteria we defined are located within a 2 mile radius of the city center. We dont see anything out of place so we wont be dropping any observations.
+
+```{r, echo = FALSE, warning = FALSE, message = FALSE, fig.width=8,fig.height=4}
+# Examining the distribution of the distance variable
+df_ams %>%  ggplot(aes(distance)) + 
+  geom_histogram(color = 'black') + 
+  labs(x = "Distance to city center (miles)", y = "No of Hotels") + 
+  scale_x_continuous(breaks = c(1,2,3,4,5,6))
+```
+
+\newpage
+
+**Non-Parametric Regression**
+
+We will start off with a simple comparison and split the Amsterdam hotel data into two categories "close" and "far". Close category hotels consist of those hotels which are less than 2.0 miles away from the city center while any hotel above 2.0 miles is categorized as far hotel. These two categories will act as two bins. Differentiation has been based on the numeric quantity '2.0 ' miles since this is the distance that has been assumed by the author of the book for hotels in Austria. Author has taken the assumption that a couple is fine walking 2 miles for 'close' hotels.
+
+The 'close' bin contains 150 hotels and the 'far' bin contains 45 hotels. Price comparison for the two bins is shown below:
+
+```{r, echo = FALSE, warning = FALSE, message = FALSE, fig.width=8,fig.height=4}
+df_ams <- df_ams %>% mutate(dist_category = ifelse(distance < 2,"close","far"))
+df_ams <- df_ams %>% mutate(dist_category = factor(dist_category))
+                          
+df_ams %>% group_by(dist_category) %>%
+  summarise("mean_price" = round(mean(price))) %>%
+  ggplot(aes(dist_category, mean_price, label = mean_price)) + geom_point() +
+  labs(x = " Distance to city center (categories)", y = "Average Price ($)")+ coord_cartesian(ylim = c(50, 200)) + geom_text(vjust = -1)
+```
+
+The hotels less than 2.0 miles away cost an average of \$157 compared to Austria's \$116 while those more than 2.0 miles away cost an average of \$118 compared to Austria's \$90. Austria's hotels are on average much cheaper than Amsterdam.
+
+Now we will create more refined bins splitting the 2 bins into 4 bins. These 4 bins have the ranges of [0,1],[1,2],[2,3],a nd [3,7]. We will visualize a bin scatter to show the average prices for each bin:
+
+```{r, echo = FALSE, warning = FALSE, message = FALSE, fig.width=8,fig.height=3.5}
+ggplot(df_ams, aes(x=distance,y=price)) + 
+  stat_summary_bin(fun='mean', bins = 4, color='red', size=2, geom='point',breaks = c(0,1,2,3,6)) + coord_cartesian(ylim = c(50, 200), xlim = c(0,6)) + labs(x = " Distance to city center (miles)", y = "Price ($)") +scale_x_continuous(breaks = c(1,2,3,4,5,6))
+```
+
+This regression shows that the hotels close to city center are more expensive on average. Beyond 4 miles, the average price in the 4-7 miles bin rises. The relationship appears to be monotonic but non-linear. We see a larger negative difference between the [0,1] miles and the [1,2] miles than between adjacent bins at higher distances.
+
+After bin scatters, we look at a smoothed non parametric loess regression:
+
+```{r, echo = FALSE, warning = FALSE, message = FALSE, fig.width=8,fig.height=4}
+ggplot(df_ams, aes(x=distance,y=price)) + geom_point() + geom_smooth(method = "loess") + coord_cartesian(ylim = c(50, 350)) + labs(x = " Distance to city center (miles)", y = "Price ($)") +  scale_x_continuous(breaks = c(1,2,3,4,5,6))
+
+```
+
+We can see a general negative trend in price as we move away from the city center. The curve follows a nearly identical trend to that of shown for Austrian hotels. In both loess regression graphs, There is a steep decline in prices till 1 mile after which the curve flattens out till 4 miles after which it it rises slightly a bit. This smooth non parametric regression is a corresponding version of the binwidth scatter plot.
+
+**Linear Regression**
+
+Non parametric regressions dont produce readily interpretable quantitative answers. Hence, we carry out a parametric linear regression:
+
+```{r, echo = FALSE, warning = FALSE, message = FALSE}
+# Linear Regression
+
+df_ams_reg <- lm(price ~ distance, data = df_ams)
+summary(df_ams_reg)
+
+```
+
+**Interpretation**
+
+Hotels that are 1 mile further away from the city center are on average \$13 cheaper in Amsterdam, considering all other factors are held constant. The intercept is \$167.6 which tells us that the average price of a hotel situated exactly in the city center would be \$167.6. It is to be kept in mind that in reality a hotel might not be present exactly at the city center but can be present a few steps away.
+
+In comparison, Austrian hotels are \$14 cheaper on average for every mile away from city center.
+
+```{r, echo = FALSE, warning = FALSE, message = FALSE, fig.width=8,fig.height=4}
+ggplot( data = df_ams, aes( x = distance, y = price) ) + 
+  geom_point( color='blue') +
+  geom_smooth( method = lm , color = 'red' ) +
+  labs(x = "Distance to city center (Miles)",y = "Price($)")
+
+```
+
+**Conclusion**
+
+We wanted to study the relationship between weekday price and distance for hotels that are rated as 3.0 to 4.0 stars. came to the conclusion that although hotels in both cities follow a similar trend in price as we move away from the city center, hotels in Amsterdam are on average more expensive than the hotels in Austria.
