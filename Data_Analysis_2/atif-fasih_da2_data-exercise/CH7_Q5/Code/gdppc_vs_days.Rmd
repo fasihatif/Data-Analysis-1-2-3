@@ -1,0 +1,55 @@
+---
+title: "GDPPC vs Business Days Analysis"
+author: "Fasih Atif"
+date: "12/9/2020"
+output: pdf_document
+---
+
+```{r, INCLUDE = FALSE}
+# For scaling ggplots
+require(scales)
+# Estimate piecewise linear splines
+#install.packages("lspline")
+library(lspline)
+# Estimate robust SE
+#install.packages("estimatr")
+library(estimatr)
+# Compare models with robust SE
+#install.packages("texreg")
+library(texreg)
+# For different themes
+#install.packages(ggthemes)
+library(ggthemes)
+# Non parametric Regression
+```
+
+**Basic Scatterplot Visualization**
+
+```{r, echo = FALSE}
+ggplot(df, aes(x = business_days, y = gdppc)) + geom_point() + geom_smooth(method = "loess")
+```
+
+**Taking logs to check whether graph look sbetter**
+
+```{r}
+ggplot(df, aes(x = business_days, y = gdppc)) + geom_point() + geom_smooth(method = "loess") + scale_x_continuous( trans = log_trans())+ scale_y_continuous( trans = log_trans())
+```
+
+**Data looks linear and spread out so we take logs**
+
+```{r}
+df <- df %>% mutate( ln_gdppc = log( gdppc),
+                     ln_gdptot = log( gdptot ))
+```
+
+```{r, ECHO = FALSE}
+reg_linear <- lm_robust(ln_gdppc ~ ln_bus_days, data = df)
+summary(reg_linear)
+
+
+ggplot( data = df, aes( x = ln_bus_days, y = ln_gdppc )) + 
+  geom_point( color='blue') +
+  geom_smooth( method = lm , color = 'red' )
+
+
+```
