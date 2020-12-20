@@ -1,0 +1,124 @@
+---
+title: "CH5_QR_RMD"
+author: "Fasih Atif"
+date: "10/26/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+## Introduction to Analysis
+
+I downloaded the GDP per capita and CO2 emissions per capita data from World Bank Indicators website. I took values of 2016 since there was no info on CO2 emissions per capita beyond 2016. I imported both tables and merged them together. There were a total of 264 countries(observations). I then filtered for missing values which left me with 238 observations.I then arranged the data in ascending order of gdp and split the data into 2 groups with the help of the median. All the countries with GDP per capita above and equal 5555.335 were assigned group 2 while the rest were assigned group 1. 
+
+h0: There is no difference in average CO2 emissions per capita between the two groups
+
+ha: There is a difference in average the CO2 emissions per capita between the the two groups
+
+```{r, message = FALSE, warning=FALSE, include = FALSE}
+data_in <- "C:/Users/abc/OneDrive/Business_Analytics/DA1-BA/Data_Analysis_1_Data_Exercise/atif-fasih_da1_data-exercise/CH5 Q5 (2 star)/"
+co2_per_capita <- read_csv(paste0(data_in,"CO2_per_capita.csv"))
+
+data_in <- "C:/Users/abc/OneDrive/Business_Analytics/DA1-BA/Data_Analysis_1_Data_Exercise/atif-fasih_da1_data-exercise/CH5 Q5 (2 star)/"
+gdp_per_capita <- read_csv(paste0(data_in,"GDP_per_capita.csv"))
+```
+
+```{r, include = FALSE}
+# Rename columns
+co2_per_capita <- rename(co2_per_capita, 'country' = 'Country Name' ,'co2' = '2016')
+gdp_per_capita <- rename(gdp_per_capita, 'country' = 'Country Name' , 'gdp' = '2016')
+```
+
+```{r, include = FALSE}
+# Merge the two tables
+gdp_co2_data <- merge(gdp_per_capita,co2_per_capita, by = 'country')
+```
+
+```{r,include = FALSE}
+# Sort table by GDP
+gdp_co2_data <- gdp_co2_data %>% arrange(gdp)
+```
+
+```{r,include = FALSE}
+# Remove countries missing values
+gdp_co2_data <- gdp_co2_data[complete.cases(gdp_co2_data),]
+```
+
+```{r,include = FALSE}
+# Calculate median for splitting into 2 groups
+median(gdp_co2_data$gdp)
+```
+
+```{r,include = FALSE}
+# Split into 2 groups 
+gdp_co2_data <- gdp_co2_data %>%
+mutate('group' = ifelse(gdp >= 5555.335, 'group2','group1'))
+```
+
+Here is what the data looked like:
+```{r}
+head(gdp_co2_data,3)
+tail(gdp_co2_data,3)
+```
+```{r,include = FALSE}
+# No of observations in each group
+table(gdp_co2_data$group)
+
+```
+
+I  then calculated the means of each group
+```{r,message = FALSE, warning=FALSE}
+group1_mean <- mean(gdp_co2_data$co2[gdp_co2_data$group == 'group1'])
+group2_mean <- mean(gdp_co2_data$co2[gdp_co2_data$group == 'group2'])
+```
+
+I calculated the difference in observed mean of the 2 groups
+
+```{r,message = FALSE, warning=FALSE}
+mean_diff <- group2_mean - group1_mean
+```
+
+I proceeded to create the Bootstrap procedure with 10000 samples
+```{r,message = FALSE, warning=FALSE}
+set.seed(13456)
+n_group1 <- 119
+n_group2 <- 119
+
+# No of boostrap samples
+B <- 10000
+```
+
+I converted the Boot-sample into a column
+```{r,message = FALSE, warning=FALSE}
+
+boot_group1 <- matrix(sample(gdp_co2_data$co2[gdp_co2_data$group == 'group1'],
+size = B*n_group1, replace = TRUE),ncol = B,nrow = n_group1)
+
+boot_group2 <- matrix(sample(gdp_co2_data$co2[gdp_co2_data$group == 'group2'],
+size = B*n_group2, replace = TRUE),ncol = B, nrow = n_group2)
+
+```
+
+I calculated the difference in MEANS for each of the bootsamples
+```{r,message = FALSE, warning=FALSE}
+Boot_diff_in_means <- colMeans(boot_group1) - colMeans(boot_group2)
+```
+
+The "PERCENTILE" bootstrap confidence interval (95%)
+```{r,message = FALSE, warning=FALSE}
+quantile(Boot_diff_in_means, prob = 0.025)
+quantile(Boot_diff_in_means, prob = 0.975)
+```
+
+The standard Error
+```{r}
+std <- sd(gdp_co2_data$co2)
+SE <- std/238^1/2
+SE
+
+```
+### Result
+We are 95% confident that the true/population difference in means of CO2 emissions per capita between the two groups is somewhere between -7.27 and -4.93. We reject null hypothesis.
