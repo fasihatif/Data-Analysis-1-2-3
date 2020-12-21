@@ -1,0 +1,181 @@
+---
+title: "CH9_Q5"
+author: "Fasih Atif"
+date: "12/21/2020"
+output: pdf_document
+---
+
+The purpose of this task is to analyze the relationship between management quality score and size of firm as measured by number of employees. The country that will be the focus of our research is Canada.
+
+The dataset looks like the following:
+
+```{r, include = FALSE}
+
+# Set Cran mirror to avoid error
+local({r <- getOption("repos")
+       r["CRAN"] <- "http://cran.r-project.org" 
+       options(repos=r)
+})
+
+library(tidyverse)
+library(data.table)
+library(rvest)
+library(knitr)
+library(ggpubr)
+library(scales)
+library(estimatr)
+library(lspline)
+library(texreg)
+
+url <- 'https://raw.githubusercontent.com/fasihatif/Data-Analysis-1-2-3/master/Data_Analysis_2/atif-fasih_da2_data-exercise/CH9_Q5/data/wms_da_textbook.csv'
+df <- read_csv(url)
+df <- df %>% select(country,management,emp_firm)
+df <- df %>% filter(country == 'Canada' )
+```
+
+```{r, echo = FALSE}
+head_table <- head(df)
+kable(head_table)
+```
+
+## Analysis
+
+We will start by doing a simple linear regression between management quality score and firm size. The visualization of the regression is shown in **Figure 1** in appendix.
+
+```{r, include = FALSE}
+linear_reg <- lm_robust(management ~ emp_firm, data = df)
+summary(linear_reg)
+
+# Visualize linear regression graph
+linear_reg_graph <- ggplot(df, aes( x = emp_firm, y = management)) + geom_point()+
+  geom_smooth( method = 'lm' , color = 'red' )
+```
+
+**Interpretation:**
+
+**Beta**: Management quality score rises by 0.012 units as the number of employees in firm increase by 1.
+
+**Alpha**: We would expect an average management quality score of 3.05 if number of employees in firm was zero which cant be possible hence its meaningless in this situation.
+
+**Confidence Interval Interpretation**: We can be 95% confident that the average management quality score can be expected to be between 8.883e-05 and 0.00017.
+
+## Log Transformation
+
+The scatterplot in the previous graph showed us how nonlinear and skewed the graph is. We will transform the variables and see if we can visualize the graph better.
+
+**Model 1: management = alpha +beta\*emp\_firm (Figure 2)**
+
+**Model 2: management = alpha +beta\*ln\_emp\_firm (Figure 3)**
+
+```{r, include = FALSE}
+
+# Remove extreme values since focus is on mid size firms
+df <- df %>% filter(!emp_firm == 1)
+df <- df %>% filter(!emp_firm == 10500)
+
+# Level-Level Transformation
+lvl_lvl <- ggplot(df, aes( x = emp_firm, y = management)) + geom_point()+
+  geom_smooth( method = 'loess' , color = 'red' ) + labs(x = "No of employees in firm", y = "Management Quality Score")
+
+# Level-Log Transformation
+lvl_log <- ggplot(df, aes( x = emp_firm, y = management)) + geom_point()+
+  geom_smooth( method = 'loess' , color = 'red' ) + labs(x = "No of employees in firm (ln scale)", y = "Management Quality Score") +scale_x_continuous(trans = log_trans(), breaks = c(10,100,500,1000,3000))
+
+```
+
+The loess graphs show us that Model 2 does a comparatively better job at visualizing the data.
+
+```{r, include = FALSE}
+# Add new columns
+df <- df %>% mutate(ln_emp_firm = log(emp_firm),
+                    ln_emp_firm_sq = ln_emp_firm*ln_emp_firm)
+```
+
+## Regression Analysis to capture non linearities
+
+We will try to capture the non linearity via different regression models such as Simple linear regression with log x **(Figure 4)**, Quadratic **(Figure 5)** and Piecewise linear spline **(Figure 6)**. The results of the regressions are summarized in the table below:
+
+```{r, include = FALSE}
+
+# Simpel Linear Regression with log
+linear_log_reg <- lm_robust( management ~ ln_emp_firm , data = df , se_type = "HC2" )
+
+linear_log_reg_graph <- ggplot( data = df, aes( x = ln_emp_firm, y = management ) ) + 
+  geom_point() +
+  geom_smooth( method = lm , color = 'red' )
+
+# Quadratic Regression
+quad_reg <- lm_robust( management ~ ln_emp_firm + ln_emp_firm_sq , data = df )
+
+quad_reg_graph <- ggplot( data = df, aes( x = ln_emp_firm, y = management) ) + 
+  geom_point() +
+  geom_smooth( formula = y ~ poly(x,2) , method = lm , color = 'red' )
+
+# Piecewise linear Spline Regression
+
+cutoff <- 100
+cutoff <- log(cutoff)
+
+# Use simple regression with the lspline function
+lspline_reg <- lm_robust(management ~ lspline( ln_emp_firm, cutoff ), data = df )
+summary( lspline_reg  )
+lspline_reg_graph <- ggplot( data = df, aes( x = ln_emp_firm, y = management ) ) + 
+  geom_point() +
+  geom_smooth( formula = y ~ lspline(x,cutoff) , method = lm , color = 'red' )
+
+```
+
+```{r, include = FALSE}
+data_out <- 'C:/Users/abc/OneDrive/Business_Analytics/Data-Analysis-1-2-3/Data_Analysis_2/atif-fasih_da2_data-exercise/CH9_Q5/docs/'
+  
+htmlreg( list(linear_reg, linear_log_reg, quad_reg , lspline_reg),
+         type = 'html',
+         custom.model.names = c("management - linear", "management - linear","management - quadratic",
+                                "management - PLS"),
+         caption = "Management Quality Score vs Employment",
+         file = paste0( data_out ,'model_comparison.html'), include.ci = FALSE)
+```
+
+![](C:/Users/abc/AppData/Local/RStudio/tmp/paste-8A97302F.png)
+
+Based on our robustness checks that we carried out, we can reject the linear approximation that we carried out at the start. The simple linear regression with log x variable better approximates the non linearity in the data.
+
+\newpage
+
+## Appendix
+
+### Figure 1
+
+```{r, echo = FALSE, warning= FALSE, message= FALSE, fig.height= 4}
+linear_reg_graph
+```
+
+### Figure 2
+
+```{r, echo = FALSE, warning= FALSE, message= FALSE, fig.height= 4}
+lvl_lvl
+```
+
+### Figure 3
+
+```{r, echo = FALSE, warning= FALSE, message= FALSE, fig.height= 4}
+lvl_log
+```
+
+### Figure 4
+
+```{r, echo = FALSE, warning = FALSE, message = FALSE, fig.height= 4}
+linear_log_reg_graph
+```
+
+### Figure 5
+
+```{r, echo = FALSE, warning = FALSE, message = FALSE, fig.height= 4}
+quad_reg_graph
+```
+
+### Figure 6
+
+```{r, echo = FALSE, warning = FALSE, message = FALSE, fig.height= 4}
+lspline_reg_graph
+```

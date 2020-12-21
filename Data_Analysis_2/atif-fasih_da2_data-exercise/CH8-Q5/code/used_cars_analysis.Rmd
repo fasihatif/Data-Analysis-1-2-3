@@ -7,8 +7,6 @@ output: pdf_document
 
 Our task is to analyze Price vs Age of cars to find a good car deal. For this purpose, I web scrapped data from a cars website named [truecars.com](https://www.truecar.com/) which sells used cars and is based in the United States. The brand and type of car we will use for analysis is the Ford Fusion.
 
-![](images/2020-Ford-Fusion-FrontSide_FOFUS2001_640x480.jpg)
-
 ## **Price vs Age Analysis for Ford Fusion**
 
 ```{r, include= FALSE}
@@ -118,10 +116,9 @@ lspline_reg_graph <- ggplot( data = database, aes( x = age, y = ln_price ) ) +
 ```
 
 ```{r, include = FALSE}
-
 data_out <- 'C:/Users/abc/OneDrive/Business_Analytics/Data-Analysis-1-2-3/Data_Analysis_2/atif-fasih_da2_data-exercise/CH8-Q5/docs/'
   
-texreg( list(linear_reg , quad_reg , lspline_reg),
+htmlreg( list(linear_reg , quad_reg , lspline_reg),
          type = 'html',
          custom.model.names = c("ln_price - linear","ln_price - quadratic",
                                 "ln_spline - PLS"),
