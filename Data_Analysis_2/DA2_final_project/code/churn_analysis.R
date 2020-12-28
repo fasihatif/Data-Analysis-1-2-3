@@ -5,6 +5,7 @@
 library(tidyverse)
 library(data.table)
 library(lubridate)
+library(fastDummies)
 
 ##########################################
 #             Data Import                #
@@ -49,6 +50,11 @@ df_draft <- merge(DfCustomerHistory,DfChurnOutput, by = 'id')
 # Get stats of each column
 summary(df_draft) # add some analysis regarding consumption and forecasting
 
+
+##########################################
+#             Cleaning the Data          #
+##########################################
+
 # Number of missing values in each column
 na_count <- sapply(df_draft, function(y) sum(length(which(is.na(y)))))
 na_count <- data.frame(na_count)
@@ -61,22 +67,21 @@ na_count$na_percent <- sapply(df_draft, function(y) round((sum(length(which(is.n
 col_30 <- na_count %>% filter(na_percent < 30)
 col_30 <- rownames(col_30)
 
-##########################################
-#             Cleaning the Data          #
-##########################################
-
 # Remove columns with NA values greater than 30%
 df_draft <- df_draft %>% select(all_of(col_30))
 
 # Fill in missing dates with median
-## Replace NA in 'date_end' column with median date
+## Replace NA values in 'date_end' column with median date
 df_draft$date_end[is.na(df_draft$date_end)]<-median(df_draft$date_end,na.rm=TRUE)
 
-##Replace NA in 'date_renewal' column with median date
+##Replace NA values in 'date_renewal' column with median date
 df_draft$date_renewal[is.na(df_draft$date_renewal)]<-median(df_draft$date_renewal,na.rm=TRUE)
 
-## Replace NA in 'date_modif_prod' column with median date
+## Replace NA values in 'date_modif_prod' column with median date
 df_draft$date_modif_prod[is.na(df_draft$date_modif_prod)]<-median(df_draft$date_modif_prod,na.rm=TRUE)
+
+## Replace NA values in channel sales column with 'null_channel'
+df_draft$channel_sales[is.na(df_draft$channel_sales)] <- "null_channel"
 
 # Convert 'has_gas' column from T/F to 1/0
 df_draft <- df_draft %>% mutate('has_gas' =  as.numeric(has_gas))
@@ -108,7 +113,34 @@ df_draft <- df_draft %>% mutate('months_renewal' =  as.integer((difftime(ref_dat
 
 # Remove columns with NA values greater than 30%
 df <- df_draft %>% select(all_of(col_30), contract_duration,has_gas,contract_modif,months_active,months_end,months_modif,months_renewal)
-df <- df %>% select(-c(cons_12m, cons_last_month, date_activ,date_end,date_modif_prod,date_renewal, date_renewal,forecast_cons_year, origin_up))
+df <- df %>% select(-c(date_activ,date_end,date_modif_prod,date_renewal, date_renewal,forecast_cons_year, origin_up))
+
+# Dummy Variable creation for channel_sales and has_gas
+## How many dummy columns to make?
+# df_backup <- df
+
+df %>% 
+  group_by(channel_sales) %>%
+  summarize(channel_count = n()) # 8 unique channels so we will make 8 dummy columns
+
+## Create dummy variables using the fastdummies library
+df <- df %>% dummy_cols(select_columns = c("channel_sales","has_gas"), remove_selected_columns = TRUE)
+
+## Updating column names of dummy variables for easier understanding
+df <- df %>% 
+  rename(
+    "channel_foos" = channel_sales_foosdfpfkusacimwkcsosbicdxkicaua,
+    "channel_usil" = channel_sales_usilxuppasemubllopkaafesmlibmsdf,
+    "channel_lmke" = channel_sales_lmkebamcaaclubfxadlmueccxoimlema,
+    "channel_ewpa" = channel_sales_ewpakwlliwisiwduibdlfmalxowmwpci,
+    "channel_epum" = channel_sales_epumfxlbckeskwekxbiuasklxalciiuu,
+    "channel_sddi" = channel_sales_sddiedcslfslkckwlfkdpoeeailfpeds,
+    "channel_fixd" = channel_sales_fixdbufsefwooaasfcxdxadsiekoceaa,
+    "channel_null" = channel_sales_null_channel
+  )
+
+## Remove one of the dummy columns to cater for multicollinearity. We will remove 'channel_null' and 'has_gas_0'
+df <- subset(df,select = -c(channel_null,has_gas_0))
 
 ##########################################
 #        Exploratory Data Analysis       #
@@ -156,6 +188,86 @@ months_renewal_barchart <- months_length(df$months_renewal,df$churn)
 
 # No of months since contract was last modified 
 months_modif_barchart <- months_length(df$months_modif,df$churn)
+
+
+ggplot(df, aes(x = cons_gas_12m)) + geom_()
+months_length(df$cons_12m,df$churn)
+
+##### CONSUMPTION VARIABLES EXPLORATORY ANALYSIS #####
+
+df %>%
+  select(cons_12m,cons_gas_12m,cons_last_month,imp_cons) %>%
+  keep(is.numeric) %>% 
+  gather() %>% 
+  ggplot(aes(value)) +
+  facet_wrap(~key, scales = "free") +
+  geom_histogram() + theme_bw()
+
+##### FORECAST VARIABLES EXPLORATORY ANALYSIS #####
+
+df %>%
+  select(forecast_cons_12m,forecast_discount_energy,forecast_meter_rent_12m,forecast_price_energy_p1,forecast_price_energy_p2,forecast_price_pow_p1) %>%
+  keep(is.numeric) %>% 
+  gather() %>% 
+  ggplot(aes(value)) +
+  facet_wrap(~key, scales = "free") +
+  geom_histogram() + theme_bw()
+
+##### MARGIN VARIABLES EXPLORATORY ANALYSIS #####
+
+df %>%
+  select(margin_gross_pow_ele,margin_net_pow_ele,net_margin) %>%
+  keep(is.numeric) %>% 
+  gather() %>% 
+  ggplot(aes(value)) +
+  facet_wrap(~key, scales = "free") +
+  geom_histogram() + theme_bw()
+
+##### OTHER VARIABLES EXPLORATORY ANALYSIS #####
+
+df %>%
+  select(nb_prod_act,num_years_antig,pow_max) %>%
+  keep(is.numeric) %>% 
+  gather() %>% 
+  ggplot(aes(value)) +
+  facet_wrap(~key, scales = "free") +
+  geom_histogram() + theme_bw()
+
+##########################################
+#        Transformation of data          #
+##########################################
+# backupdf1 <- df
+
+##### Transformation of Consumption variables #####
+
+# Set negative values as NaN as log cant be taken for negative values
+df <- df %>% mutate(cons_12m = replace(cons_12m, which(cons_12m < 0), NaN))
+df <- df %>% mutate(cons_gas_12m = replace(cons_gas_12m, which(cons_gas_12m < 0), NaN))
+df <- df %>% mutate(cons_last_month = replace(cons_last_month, which(cons_last_month < 0), NaN))
+df <- df %>% mutate(imp_cons = replace(imp_cons , which(imp_cons  < 0), NaN))
+
+# Take log of consumption variables
+df <- df %>% mutate( ln_cons_12m = log( cons_12m ),
+                     ln_cons_gas_12m = log( cons_gas_12m),
+                     ln_cons_last_month = log(cons_last_month),
+                     ln_imp_cons = log(imp_cons)) 
+
+##### Transformation of Consumption variables #####
+
+# Set negative values as NaN as log cant be taken for negative values
+df <- df %>% mutate(forecast_cons_12m = replace(forecast_cons_12m, which(forecast_cons_12m < 0), NaN))
+df <- df %>% mutate(forecast_meter_rent_12m = replace(forecast_meter_rent_12m, which(forecast_meter_rent_12m < 0), NaN))
+
+
+
+# Take log of consumption variables
+df <- df %>% mutate( ln_forecast_cons_12m = log(forecast_cons_12m),
+                     ln_forecast_discount_energy = log(forecast_discount_energy),
+                     ln_forecast_meter_rent_12m = log(forecast_meter_rent_12m)) 
+
+
+
+
 
 
 
