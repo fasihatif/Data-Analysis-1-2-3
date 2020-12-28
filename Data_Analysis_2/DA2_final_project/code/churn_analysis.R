@@ -6,11 +6,9 @@ library(tidyverse)
 library(data.table)
 library(lubridate)
 
-
 ##########################################
 #             Data Import                #
 ##########################################
-
 
 # Import CustomerHistory.csv
 urlCustomerHistory <- 'https://raw.githubusercontent.com/fasihatif/Data-Analysis-1-2-3/master/Data_Analysis_2/DA2_final_project/data/CustomerDetails.csv'
@@ -88,34 +86,29 @@ df_draft <- df_draft %>% mutate('has_gas' =  as.numeric(has_gas))
 ##########################################
 
 # Create 'contract duration' column and divide by 365 to get yearly values
-df_draft <- df_draft %>% mutate('contract_duration' =  round(as.numeric(difftime(date_end,date_activ, unit = "days"))/365, digits = 2))
-
+df_draft <- df_draft %>% mutate('contract_duration' =  as.integer((difftime(date_end,date_activ, unit = "days"))/(365.25/12)))
 
 # Create contract_modif column
 df_draft <- df_draft %>% mutate('contract_modif' =  ifelse(date_modif_prod>date_activ,1,0))
 
-# Create reference date for calculations. We will take 1st Jan 2020 since it is fiven as the reference date
+# Create reference date for calculations. We will take 1st Jan 2020 since it is given as the reference date
 ref_date = ymd(20160101)
 
 # No of years since contract went active
-df_draft <- df_draft %>% mutate('years_active' =  round(as.numeric(difftime(ref_date,date_activ, unit = "days"))/365, digits = 2))
+df_draft <- df_draft %>% mutate('months_active' =  as.integer((difftime(ref_date,date_activ, unit = "days"))/(365.25/12)))
 
 # No of years left in contract
-df_draft <- df_draft %>% mutate('years_end' =  round(as.numeric(difftime(date_end, ref_date, unit = "days"))/365, digits = 2))
+df_draft <- df_draft %>% mutate('months_end' =  as.integer((difftime(date_end,ref_date, unit = "days"))/(365.25/12)))
 
 # No of years since last modification at reference date
-df_draft <- df_draft %>% mutate('years_modif' =  round(as.numeric(difftime(ref_date,date_modif_prod, unit = "days"))/365, digits = 2))
+df_draft <- df_draft %>% mutate('months_modif' =  as.integer((difftime(ref_date,date_modif_prod, unit = "days"))/(365.25/12)))
 
-# Number of months since last renewal at reference date since last renewal at reference date
-df_draft <- df_draft %>% mutate('years_renewal' =  round(as.numeric(difftime(ref_date,date_renewal, unit = "days"))/365, digits = 2))
-
-
-# How much was last months power consumption lesser/greater than the average consumption of the last 12 months?
-df_draft <- df_draft %>% mutate("power_lm_vs_avg" = cons_last_month - mean(cons_12m))
+# Number of months since last renewal at reference date
+df_draft <- df_draft %>% mutate('months_renewal' =  as.integer((difftime(ref_date,date_renewal, unit = "days"))/(365.25/12)))
 
 # Remove columns with NA values greater than 30%
-#df <- df_draft %>% select(all_of(col_30),power_lm_vs_avg, contract_duration,has_gas,contract_modif)
-df <- df_draft %>% select(-c(channel_sales,cons_12m, cons_last_month, date_activ,date_end,date_modif_prod,date_renewal, date_renewal,forecast_cons_year, origin_up))
+df <- df_draft %>% select(all_of(col_30), contract_duration,has_gas,contract_modif,months_active,months_end,months_modif,months_renewal)
+df <- df %>% select(-c(cons_12m, cons_last_month, date_activ,date_end,date_modif_prod,date_renewal, date_renewal,forecast_cons_year, origin_up))
 
 ##########################################
 #        Exploratory Data Analysis       #
@@ -133,26 +126,36 @@ churn_rate_barchart <- df %>%
   labs(x = '', fill = "Status")
 
 
-# Contract duration of companies
-## Creating bins for years
-breaks <- c(1:17)
-tags <- c(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16)
-
-df$duration_bins <- cut(df$contract_duration, 
-                        breaks=breaks, 
-                        include.lowest=TRUE, 
-                        right=FALSE, 
-                        labels=tags)
-
-duration_barchart <- df %>% 
-  select(churn,contract_duration,duration_bins) %>%
-  group_by(duration_bins,churn) %>%
-  summarise(duration_count = n()) %>%
-  mutate(status = ifelse(churn == 1, "Churned", "Retention")) %>%
-  ggplot(aes(x = duration_bins, y = duration_count, fill= factor(status))) +
+# Function to calculate no of months in the duration between a date column and reference date
+months_length <- function(column1, column2){
+  
+  dataframe <- data.frame(column1, column2)
+  
+  bar_chart <- dataframe %>%
+  group_by(column1, column2) %>%
+  summarise(months_count = n()) %>%
+  mutate(status = ifelse(column2 == 1, "Churned", "Retention")) %>%
+  ggplot(aes(x = column1, y = months_count, fill= factor(status))) +
   geom_bar(stat = "identity") +
-  labs(x = "Contract Duration (Years)", y = "No of Companies", fill = "Status")
+  labs(x = "No of months*", y = "No of Companies", fill = "Status", caption = "*Reference date taken as 1st Jan 2020")
+  
+  return(bar_chart)
+}
 
+# Duration of contract
+contract_duration_barchart <- months_length(df$contract_duration,df$churn)
+
+# No of months passed from contract active date to reference date
+months_active_barchart <- months_length(df$months_active,df$churn)
+
+# No of months left till end date from reference date
+months_end_barchart <- months_length(df$months_end,df$churn)
+
+# No of months left till renewal from reference date
+months_renewal_barchart <- months_length(df$months_renewal,df$churn)
+
+# No of months since contract was last modified 
+months_modif_barchart <- months_length(df$months_modif,df$churn)
 
 
 
