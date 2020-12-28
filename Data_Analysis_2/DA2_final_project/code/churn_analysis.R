@@ -4,6 +4,7 @@
 
 library(tidyverse)
 library(data.table)
+library(lubridate)
 
 
 ##########################################
@@ -79,6 +80,9 @@ df_draft$date_renewal[is.na(df_draft$date_renewal)]<-median(df_draft$date_renewa
 ## Replace NA in 'date_modif_prod' column with median date
 df_draft$date_modif_prod[is.na(df_draft$date_modif_prod)]<-median(df_draft$date_modif_prod,na.rm=TRUE)
 
+# Convert 'has_gas' column from T/F to 1/0
+df_draft <- df_draft %>% mutate('has_gas' =  as.numeric(has_gas))
+
 ##########################################
 #            Feature Engineering         #
 ##########################################
@@ -86,11 +90,25 @@ df_draft$date_modif_prod[is.na(df_draft$date_modif_prod)]<-median(df_draft$date_
 # Create 'contract duration' column and divide by 365 to get yearly values
 df_draft <- df_draft %>% mutate('contract_duration' =  round(as.numeric(difftime(date_end,date_activ, unit = "days"))/365, digits = 2))
 
-# Convert 'has_gas' column from T/F to 1/0
-df_draft <- df_draft %>% mutate('has_gas' =  as.numeric(has_gas))
 
 # Create contract_modif column
 df_draft <- df_draft %>% mutate('contract_modif' =  ifelse(date_modif_prod>date_activ,1,0))
+
+# Create reference date for calculations. We will take 1st Jan 2020 since it is fiven as the reference date
+ref_date = ymd(20160101)
+
+# No of years since contract went active
+df_draft <- df_draft %>% mutate('years_active' =  round(as.numeric(difftime(ref_date,date_activ, unit = "days"))/365, digits = 2))
+
+# No of years left in contract
+df_draft <- df_draft %>% mutate('years_end' =  round(as.numeric(difftime(date_end, ref_date, unit = "days"))/365, digits = 2))
+
+# No of years since last modification at reference date
+df_draft <- df_draft %>% mutate('years_modif' =  round(as.numeric(difftime(ref_date,date_modif_prod, unit = "days"))/365, digits = 2))
+
+# Number of months since last renewal at reference date since last renewal at reference date
+df_draft <- df_draft %>% mutate('years_renewal' =  round(as.numeric(difftime(ref_date,date_renewal, unit = "days"))/365, digits = 2))
+
 
 # How much was last months power consumption lesser/greater than the average consumption of the last 12 months?
 df_draft <- df_draft %>% mutate("power_lm_vs_avg" = cons_last_month - mean(cons_12m))
@@ -104,15 +122,45 @@ df <- df_draft %>% select(-c(channel_sales,cons_12m, cons_last_month, date_activ
 ##########################################
 
 # Churn Rate
-
-df %>% 
+churn_rate_barchart <- df %>% 
   select(churn) %>%
   group_by(churn) %>%
   summarise(percentage = n()) %>%
-  mutate(Percent = 100*percentage/sum(percentage))
-  
-              
-  
+  mutate(Percent = round(100*percentage/sum(percentage),1)) %>%
+  mutate(status = ifelse(churn == 1, "Churned", "Retention")) %>%
+  ggplot(aes(x = "Companies", y = Percent, fill= factor(status, levels=c("Churned","Retention")))) +
+  geom_bar(stat = "identity") + geom_text(aes(label = Percent), position = position_stack(vjust = .5)) +
+  labs(x = '', fill = "Status")
+
+
+# Contract duration of companies
+## Creating bins for years
+breaks <- c(1:17)
+tags <- c(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16)
+
+df$duration_bins <- cut(df$contract_duration, 
+                        breaks=breaks, 
+                        include.lowest=TRUE, 
+                        right=FALSE, 
+                        labels=tags)
+
+duration_barchart <- df %>% 
+  select(churn,contract_duration,duration_bins) %>%
+  group_by(duration_bins,churn) %>%
+  summarise(duration_count = n()) %>%
+  mutate(status = ifelse(churn == 1, "Churned", "Retention")) %>%
+  ggplot(aes(x = duration_bins, y = duration_count, fill= factor(status))) +
+  geom_bar(stat = "identity") +
+  labs(x = "Contract Duration (Years)", y = "No of Companies", fill = "Status")
+
+
+
+
+
+# Correlation
+select_cols <- df %>% select(forecast_meter_rent_12m,forecast_price_energy_p1,forecast_price_energy_p2,forecast_price_pow_p1, has_gas, imp_cons)
+cor1 <- cor(select_cols, use = "pairwise.complete.obs")
+ggcorrplot::ggcorrplot(cor1, method = "square",lab = TRUE)
 
 
 
