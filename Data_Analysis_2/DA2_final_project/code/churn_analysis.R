@@ -6,6 +6,8 @@ library(tidyverse)
 library(data.table)
 library(lubridate)
 library(fastDummies)
+library(estimatr)
+library(scales)
 
 ##########################################
 #             Data Import                #
@@ -203,6 +205,9 @@ df %>%
   facet_wrap(~key, scales = "free") +
   geom_histogram() + theme_bw()
 
+
+summary(df_draft$cons_last_month)
+
 ##### FORECAST VARIABLES EXPLORATORY ANALYSIS #####
 
 df %>%
@@ -233,6 +238,8 @@ df %>%
   facet_wrap(~key, scales = "free") +
   geom_histogram() + theme_bw()
 
+
+
 ##########################################
 #        Transformation of data          #
 ##########################################
@@ -240,32 +247,55 @@ df %>%
 
 ##### Transformation of Consumption variables #####
 
+# Consumption variables are right skewed as we saw from the histograms. To make them normally distributed, we will
+# take log of these variables. However, these 4 variables include negative and zero values for which log cant be taken.So 
+# we will convert negative values to NaN and add a constant 1 to these variables as well
+
 # Set negative values as NaN as log cant be taken for negative values
 df <- df %>% mutate(cons_12m = replace(cons_12m, which(cons_12m < 0), NaN))
 df <- df %>% mutate(cons_gas_12m = replace(cons_gas_12m, which(cons_gas_12m < 0), NaN))
 df <- df %>% mutate(cons_last_month = replace(cons_last_month, which(cons_last_month < 0), NaN))
 df <- df %>% mutate(imp_cons = replace(imp_cons , which(imp_cons  < 0), NaN))
 
-# Take log of consumption variables
-df <- df %>% mutate( ln_cons_12m = log( cons_12m ),
-                     ln_cons_gas_12m = log( cons_gas_12m),
-                     ln_cons_last_month = log(cons_last_month),
-                     ln_imp_cons = log(imp_cons)) 
+# Add constant 1 to the variables and then take log
+df <- df %>% mutate( ln_cons_12m = log( cons_12m + 1 ),
+                     ln_cons_gas_12m = log( cons_gas_12m + 1),
+                     ln_cons_last_month = log(cons_last_month + 1),
+                     ln_imp_cons = log(imp_cons + 1)) 
 
-##### Transformation of Consumption variables #####
+summary(df$cons_12m)
+
+##### Transformation of Forecast variables #####
 
 # Set negative values as NaN as log cant be taken for negative values
 df <- df %>% mutate(forecast_cons_12m = replace(forecast_cons_12m, which(forecast_cons_12m < 0), NaN))
 df <- df %>% mutate(forecast_meter_rent_12m = replace(forecast_meter_rent_12m, which(forecast_meter_rent_12m < 0), NaN))
 
+ 
+# Add constant 1 to the variables and then take log
+df <- df %>% mutate( ln_forecast_cons_12m = log(forecast_cons_12m + 1),
+                     ln_forecast_meter_rent_12m = log(forecast_meter_rent_12m + 1)) 
 
 
-# Take log of consumption variables
-df <- df %>% mutate( ln_forecast_cons_12m = log(forecast_cons_12m),
-                     ln_forecast_discount_energy = log(forecast_discount_energy),
-                     ln_forecast_meter_rent_12m = log(forecast_meter_rent_12m)) 
+# backup2 <- df
 
+# Now check for the distribution of the transformed variables
+df %>%
+select(ln_cons_12m,ln_cons_gas_12m,ln_cons_last_month,ln_imp_cons,ln_forecast_cons_12m,ln_forecast_meter_rent_12m) %>%
+  keep(is.numeric) %>% 
+  gather() %>% 
+  ggplot(aes(value)) +
+  facet_wrap(~key, scales = "free") +
+  geom_histogram() + theme_bw()
 
+##### Correlation #####
+
+cor1 <- cor(df, use = "pairwise.complete.obs")
+ggcorrplot::ggcorrplot(cor1, method = "square",lab = TRUE)
+
+# When you have two independent variables that are very highly correlated, you definitely should remove one of them
+# because you run into the multicollinearity conundrum and your regression model's regression coefficients related to 
+# the two highly correlated variables will be unreliable
 
 
 
