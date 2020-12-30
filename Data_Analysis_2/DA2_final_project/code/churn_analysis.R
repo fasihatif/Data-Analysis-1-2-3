@@ -8,6 +8,9 @@ library(lubridate)
 library(fastDummies)
 library(estimatr)
 library(scales)
+library(faraway)
+library(caret)
+library(car)
 
 ##########################################
 #             Data Import                #
@@ -47,7 +50,9 @@ count(unique(DfChurnOutput)) #16096
 
 # Merge dataframes by id column since equal and has unique ids. We create a df named df_draft where we do all the working for cleaning and feature engineering
 df_draft <- merge(DfCustomerHistory,DfChurnOutput, by = 'id')
-# Calculate number and percentage of missing values in each column
+write.csv(df_draft, "df_draft.csv")
+
+rm(DfChurnOutput,DfCustomerHistory)
 
 # Get stats of each column
 summary(df_draft) # add some analysis regarding consumption and forecasting
@@ -95,9 +100,6 @@ df_draft <- df_draft %>% mutate('has_gas' =  as.numeric(has_gas))
 # Create 'contract duration' column and divide by 365 to get yearly values
 df_draft <- df_draft %>% mutate('contract_duration' =  as.integer((difftime(date_end,date_activ, unit = "days"))/(365.25/12)))
 
-# Create contract_modif column
-df_draft <- df_draft %>% mutate('contract_modif' =  ifelse(date_modif_prod>date_activ,1,0))
-
 # Create reference date for calculations. We will take 1st Jan 2020 since it is given as the reference date
 ref_date = ymd(20160101)
 
@@ -114,7 +116,7 @@ df_draft <- df_draft %>% mutate('months_modif' =  as.integer((difftime(ref_date,
 df_draft <- df_draft %>% mutate('months_renewal' =  as.integer((difftime(ref_date,date_renewal, unit = "days"))/(365.25/12)))
 
 # Remove columns with NA values greater than 30%
-df <- df_draft %>% select(all_of(col_30), contract_duration,has_gas,contract_modif,months_active,months_end,months_modif,months_renewal)
+df <- df_draft %>% select(all_of(col_30), contract_duration,has_gas,months_active,months_end,months_modif,months_renewal)
 df <- df %>% select(-c(date_activ,date_end,date_modif_prod,date_renewal, date_renewal,forecast_cons_year, origin_up))
 
 # Dummy Variable creation for channel_sales and has_gas
@@ -166,12 +168,12 @@ months_length <- function(column1, column2){
   dataframe <- data.frame(column1, column2)
   
   bar_chart <- dataframe %>%
-  group_by(column1, column2) %>%
-  summarise(months_count = n()) %>%
-  mutate(status = ifelse(column2 == 1, "Churned", "Retention")) %>%
-  ggplot(aes(x = column1, y = months_count, fill= factor(status))) +
-  geom_bar(stat = "identity") +
-  labs(x = "No of months*", y = "No of Companies", fill = "Status", caption = "*Reference date taken as 1st Jan 2020")
+    group_by(column1, column2) %>%
+    summarise(months_count = n()) %>%
+    mutate(status = ifelse(column2 == 1, "Churned", "Retention")) %>%
+    ggplot(aes(x = column1, y = months_count, fill= factor(status))) +
+    geom_bar(stat = "identity") +
+    labs(x = "No of months*", y = "No of Companies", fill = "Status", caption = "*Reference date taken as 1st Jan 2020")
   
   return(bar_chart)
 }
@@ -191,10 +193,6 @@ months_renewal_barchart <- months_length(df$months_renewal,df$churn)
 # No of months since contract was last modified 
 months_modif_barchart <- months_length(df$months_modif,df$churn)
 
-
-ggplot(df, aes(x = cons_gas_12m)) + geom_()
-months_length(df$cons_12m,df$churn)
-
 ##### CONSUMPTION VARIABLES EXPLORATORY ANALYSIS #####
 
 df %>%
@@ -210,7 +208,7 @@ summary(df_draft$cons_last_month)
 
 ##### FORECAST VARIABLES EXPLORATORY ANALYSIS #####
 
-df %>%
+forecast_eda <- df %>%
   select(forecast_cons_12m,forecast_discount_energy,forecast_meter_rent_12m,forecast_price_energy_p1,forecast_price_energy_p2,forecast_price_pow_p1) %>%
   keep(is.numeric) %>% 
   gather() %>% 
@@ -220,7 +218,7 @@ df %>%
 
 ##### MARGIN VARIABLES EXPLORATORY ANALYSIS #####
 
-df %>%
+margin_eda <- df %>%
   select(margin_gross_pow_ele,margin_net_pow_ele,net_margin) %>%
   keep(is.numeric) %>% 
   gather() %>% 
@@ -230,7 +228,7 @@ df %>%
 
 ##### OTHER VARIABLES EXPLORATORY ANALYSIS #####
 
-df %>%
+other_eda <- df %>%
   select(nb_prod_act,num_years_antig,pow_max) %>%
   keep(is.numeric) %>% 
   gather() %>% 
@@ -271,7 +269,7 @@ summary(df$cons_12m)
 df <- df %>% mutate(forecast_cons_12m = replace(forecast_cons_12m, which(forecast_cons_12m < 0), NaN))
 df <- df %>% mutate(forecast_meter_rent_12m = replace(forecast_meter_rent_12m, which(forecast_meter_rent_12m < 0), NaN))
 
- 
+
 # Add constant 1 to the variables and then take log
 df <- df %>% mutate( ln_forecast_cons_12m = log(forecast_cons_12m + 1),
                      ln_forecast_meter_rent_12m = log(forecast_meter_rent_12m + 1)) 
@@ -280,13 +278,29 @@ df <- df %>% mutate( ln_forecast_cons_12m = log(forecast_cons_12m + 1),
 # backup2 <- df
 
 # Now check for the distribution of the transformed variables
-df %>%
-select(ln_cons_12m,ln_cons_gas_12m,ln_cons_last_month,ln_imp_cons,ln_forecast_cons_12m,ln_forecast_meter_rent_12m) %>%
+transformed_eda <- df %>%
+  select(ln_cons_12m,ln_cons_gas_12m,ln_cons_last_month,ln_imp_cons,ln_forecast_cons_12m,ln_forecast_meter_rent_12m) %>%
   keep(is.numeric) %>% 
   gather() %>% 
   ggplot(aes(value)) +
   facet_wrap(~key, scales = "free") +
   geom_histogram() + theme_bw()
+
+
+##### SPLIT DATA INTO TEST/TRAIN DATASET #####
+df_ml <- subset(df,select = -c(cons_12m,cons_gas_12m,cons_last_month,imp_cons,forecast_cons_12m,forecast_meter_rent_12m))
+
+
+intrain<- createDataPartition(df_ml$churn,p=0.7,list=FALSE)
+set.seed(2017)
+train <- df_ml[intrain,]
+test <- df_ml[-intrain,]
+
+a <- glm_model <- glm(churn ~ ., data = df_test)
+summary(a)
+
+df_test <- subset(df, select = c(forecast_discount_energy,forecast_price_energy_p1,forecast_price_energy_p2,forecast_price_pow_p1,margin_gross_pow_ele,margin_net_pow_ele,nb_prod_act,net_margin,num_years_antig,pow_max,churn,contract_duration,months_active,months_end,months_modif,months_renewal,channel_epum,channel_ewpa,channel_fixd,channel_foos,channel_lmke,channel_sddi,channel_usil,has_gas_1,ln_cons_12m,ln_cons_gas_12m,ln_cons_last_month,ln_imp_cons,ln_forecast_cons_12m,ln_forecast_meter_rent_12m))
+
 
 ##### Correlation #####
 
@@ -298,9 +312,10 @@ ggcorrplot::ggcorrplot(cor1, method = "square",lab = TRUE)
 # the two highly correlated variables will be unreliable
 
 
+glm_model <- lm(churn~., data = df, family = binomial("logit"),control=glm.control(maxit=100))
+vif_table <- data.frame(car::vif(a))
 
-
-
+rm()
 
 # Correlation
 select_cols <- df %>% select(forecast_meter_rent_12m,forecast_price_energy_p1,forecast_price_energy_p2,forecast_price_pow_p1, has_gas, imp_cons)
@@ -308,6 +323,26 @@ cor1 <- cor(select_cols, use = "pairwise.complete.obs")
 ggcorrplot::ggcorrplot(cor1, method = "square",lab = TRUE)
 
 
+###########################################################################################
+
+library(caret)
+
+# define training control
+train_control <- trainControl(method = "cv", number = 10)
+
+# train the model on training set
+glm_model <- train(factor(churn)~.,
+               data = df_test,
+               trControl = train_control,
+               method = "glm",
+               na.action = na.pass,
+               family=binomial())
+
+# print cv scores
+summary(glm_model)
+
+install.packages("e1071")
+library(e1071)
 
 
 
