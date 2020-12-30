@@ -12,6 +12,8 @@ library(faraway)
 library(caret)
 library(car)
 library(corrplot)
+library(e1071)
+
 ##########################################
 #             Data Import                #
 ##########################################
@@ -309,9 +311,9 @@ cor1 <- cor(df_ml, use = "pairwise.complete.obs")
 ggcorrplot::ggcorrplot(cor1, method = "square",lab = TRUE)
 
 # From the correlation matrix, we can see that 'contract_duration', 'month_activ' and 'num_years_antig' and 'months_end' have the highest correlation
-# Calculate Variance Inflation Factor
+# Calculate Variance Inflation Factor using the 'car' package
 lm_model <- lm(churn ~ ., data = df_ml)
-vif(lm(lm_model))
+car::vif(lm(lm_model))
 
 # From the VIF we can confirm that the correlations are very high and we can drop one of the variables from each correlation pair.
 df_ml <- subset(df_ml, select = -c(contract_duration,num_years_antig))
@@ -321,62 +323,38 @@ df_ml <- subset(df_ml, select = -c(contract_duration,num_years_antig))
 ##########################################
 
 ##### SPLIT DATA INTO TEST/TRAIN DATASET #####
-df_ml <- subset(df,select = -c(cons_12m,cons_gas_12m,cons_last_month,imp_cons,forecast_cons_12m,forecast_meter_rent_12m))
-
-
 
 intrain<- createDataPartition(df_ml$churn,p=0.7,list=FALSE)
 set.seed(2017)
 train <- df_ml[intrain,]
 test <- df_ml[-intrain,]
 
-a <- glm_model <- glm(churn ~ ., data = df_test)
-summary(a)
+##### LOGISTIC REGRESSION VIA GLM() #####
 
-df_test <- subset(df, select = c(forecast_discount_energy,forecast_price_energy_p1,forecast_price_energy_p2,forecast_price_pow_p1,margin_gross_pow_ele,margin_net_pow_ele,nb_prod_act,net_margin,num_years_antig,pow_max,churn,contract_duration,months_active,months_end,months_modif,months_renewal,channel_epum,channel_ewpa,channel_fixd,channel_foos,channel_lmke,channel_sddi,channel_usil,has_gas_1,ln_cons_12m,ln_cons_gas_12m,ln_cons_last_month,ln_imp_cons,ln_forecast_cons_12m,ln_forecast_meter_rent_12m))
+glm_model <- glm(churn ~ ., data = df_ml, family = binomial("logit"))
+summary(glm_model)
 
+# df_test <- subset(df, select = c(forecast_discount_energy,forecast_price_energy_p1,forecast_price_energy_p2,forecast_price_pow_p1,margin_gross_pow_ele,margin_net_pow_ele,nb_prod_act,net_margin,num_years_antig,pow_max,churn,contract_duration,months_active,months_end,months_modif,months_renewal,channel_epum,channel_ewpa,channel_fixd,channel_foos,channel_lmke,channel_sddi,channel_usil,has_gas_1,ln_cons_12m,ln_cons_gas_12m,ln_cons_last_month,ln_imp_cons,ln_forecast_cons_12m,ln_forecast_meter_rent_12m))
+# glm_model <- lm(churn~., data = df, family = binomial("logit"),control=glm.control(maxit=100))
 
-##### Correlation #####
-
-cor1 <- cor(df, use = "pairwise.complete.obs")
-ggcorrplot::ggcorrplot(cor1, method = "square",lab = TRUE)
-
-# When you have two independent variables that are very highly correlated, you definitely should remove one of them
-# because you run into the multicollinearity conundrum and your regression model's regression coefficients related to 
-# the two highly correlated variables will be unreliable
-
-
-glm_model <- lm(churn~., data = df, family = binomial("logit"),control=glm.control(maxit=100))
-vif_table <- data.frame(car::vif(a))
-
-rm()
-
-# Correlation
-select_cols <- df %>% select(forecast_meter_rent_12m,forecast_price_energy_p1,forecast_price_energy_p2,forecast_price_pow_p1, has_gas, imp_cons)
-cor1 <- cor(select_cols, use = "pairwise.complete.obs")
-ggcorrplot::ggcorrplot(cor1, method = "square",lab = TRUE)
-
-
-###########################################################################################
-
-library(caret)
+##### LOGISTIC REGRESSION VIA CARET #####
 
 # define training control
 train_control <- trainControl(method = "cv", number = 10)
 
 # train the model on training set
-glm_model <- train(factor(churn)~.,
-               data = df_test,
-               trControl = train_control,
-               method = "glm",
-               na.action = na.pass,
-               family=binomial())
+glm_model_caret <- train(factor(churn)~.,
+                         data = df_test,
+                         trControl = train_control,
+                         method = "glm",
+                         na.action = na.pass,
+                         family=binomial())
 
 # print cv scores
-summary(glm_model)
+summary(glm_model_caret)
 
-install.packages("e1071")
-library(e1071)
+
+
 
 
 
