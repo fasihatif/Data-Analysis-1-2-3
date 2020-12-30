@@ -13,6 +13,7 @@ library(caret)
 library(car)
 library(corrplot)
 library(e1071)
+library("outliers")
 
 ##########################################
 #             Data Import                #
@@ -289,7 +290,12 @@ transformed_eda <- df %>%
 #          Further Data Cleaning         #
 ##########################################
 
+df_out <- df_ml
+rm.outlier(df_out$ln_cons_12m, fill = TRUE, median = FALSE)
+boxplot(df_out$ln_cons_12m)
 
+rm.outlier(df_out$ln_imp_cons, fill = TRUE)
+boxplot(df_out$ln_imp_cons)
 
 ##### Correlation Matrix #####
 
@@ -354,7 +360,30 @@ glm_model_caret <- train(factor(churn)~.,
 summary(glm_model_caret)
 
 
+na_test <- data.frame(sapply(df_out, function(y) sum(length(which(is.na(y))))))
+a <- boxplot(df_out$ln_cons_12m)$out
 
+df_out$ln_cons_12m[df_out$ln_cons_12m %in% boxplot(df)$out] <- mean(df_out$ln_cons_12m)
+str(df_out)
 
+######################################################################
 
+remove_outliers <- function(column_name){
+# how to find outliers in r
+Q <- quantile(column_name, probs=c(.25, .75), na.rm = TRUE)
 
+# how to find outliers in r - calculate Interquartile Range
+iqr <- IQR(column_name)
+
+# how to find outliers in r - upper and lower range
+up <-  Q[2]+1.5*iqr # Upper Range  
+low<- Q[1]-1.5*iqr # Lower Range
+
+# how to remove outliers in r (the removal)
+df_out <- subset(df_out, column_name > (Q[1] - 1.5*iqr) & column_name < (Q[2]+1.5*iqr))
+
+return(df_out)
+
+}
+
+remove_outliers(df_out$ln_cons_12m)
