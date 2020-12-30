@@ -11,7 +11,7 @@ library(scales)
 library(faraway)
 library(caret)
 library(car)
-
+library(corrplot)
 ##########################################
 #             Data Import                #
 ##########################################
@@ -236,8 +236,6 @@ other_eda <- df %>%
   facet_wrap(~key, scales = "free") +
   geom_histogram() + theme_bw()
 
-
-
 ##########################################
 #        Transformation of data          #
 ##########################################
@@ -274,7 +272,6 @@ df <- df %>% mutate(forecast_meter_rent_12m = replace(forecast_meter_rent_12m, w
 df <- df %>% mutate( ln_forecast_cons_12m = log(forecast_cons_12m + 1),
                      ln_forecast_meter_rent_12m = log(forecast_meter_rent_12m + 1)) 
 
-
 # backup2 <- df
 
 # Now check for the distribution of the transformed variables
@@ -286,9 +283,46 @@ transformed_eda <- df %>%
   facet_wrap(~key, scales = "free") +
   geom_histogram() + theme_bw()
 
+##########################################
+#          Further Data Cleaning         #
+##########################################
+
+
+
+##### Correlation Matrix #####
+
+# When you have two independent variables that are very highly correlated, you definitely should remove one of them
+# because you run into the multicollinearity conundrum and your regression model's regression coefficients related to 
+# the two highly correlated variables will be unreliable
+
+# We would like to check for multicollinearity between the explanatory variables. For this, we will first create the 
+# correlation matrix. For pairs that have very high correlations, we will use Variance Inflation Factor to determine which
+# variable to remove. We will take a relaxed VIF value of 10 as a threshold. We will remove all variables which have a VIF
+# than 10
+
+# Remove variables that have already been transformed and no longer required. We will assign to new dataframe so we have original as backup
+# and can always come back to play with it
+df_ml <- subset(df,select = -c(id,cons_12m,cons_gas_12m,cons_last_month,imp_cons,forecast_cons_12m,forecast_meter_rent_12m))
+
+# Correlation Matrix
+cor1 <- cor(df_ml, use = "pairwise.complete.obs")
+ggcorrplot::ggcorrplot(cor1, method = "square",lab = TRUE)
+
+# From the correlation matrix, we can see that 'contract_duration', 'month_activ' and 'num_years_antig' and 'months_end' have the highest correlation
+# Calculate Variance Inflation Factor
+lm_model <- lm(churn ~ ., data = df_ml)
+vif(lm(lm_model))
+
+# From the VIF we can confirm that the correlations are very high and we can drop one of the variables from each correlation pair.
+df_ml <- subset(df_ml, select = -c(contract_duration,num_years_antig))
+
+##########################################
+#             Machine Learning           #
+##########################################
 
 ##### SPLIT DATA INTO TEST/TRAIN DATASET #####
 df_ml <- subset(df,select = -c(cons_12m,cons_gas_12m,cons_last_month,imp_cons,forecast_cons_12m,forecast_meter_rent_12m))
+
 
 
 intrain<- createDataPartition(df_ml$churn,p=0.7,list=FALSE)
