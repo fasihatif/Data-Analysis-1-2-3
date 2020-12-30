@@ -12,8 +12,6 @@ library(faraway)
 library(caret)
 library(car)
 library(corrplot)
-library(e1071)
-library("outliers")
 
 ##########################################
 #             Data Import                #
@@ -290,15 +288,95 @@ transformed_eda <- df %>%
 #          Further Data Cleaning         #
 ##########################################
 
+# Checkpoint for further data cleaning
+# df_ftc <- df
+# df <- df_ftc
+
+df <- subset(df,select = -c(id,cons_12m,cons_gas_12m,cons_last_month,imp_cons,forecast_cons_12m,forecast_meter_rent_12m))
+
 remove_outliers <- function(column_name){
   
   outliers <- boxplot(column_name, plot=FALSE)$out
-  df_ml<- df_ml[-which(column_name %in% outliers),]
+  df<- df[-which(column_name %in% outliers),]
 }
 
-remove_outliers(df_ml$forecast_price_energy_p2)
+boxplot(df$forecast_price_energy_p1) 
+remove_outliers(df$forecast_price_energy_p1)
+boxplot(df$forecast_price_energy_p1)
 
-boxplot(df_ml$forecast_price_energy_p2)
+boxplot(df$forecast_price_energy_p2)
+remove_outliers(df$forecast_price_energy_p2)
+boxplot(df$forecast_price_energy_p2)
+
+boxplot(df$forecast_discount_energy)
+remove_outliers(df$forecast_discount_energy)
+boxplot(df$forecast_discount_energy)
+
+boxplot(df$forecast_price_pow_p1)
+remove_outliers(df$forecast_price_pow_p1)
+boxplot(df$forecast_price_pow_p1)
+
+boxplot(df$ln_forecast_cons_12m)
+remove_outliers(df$ln_forecast_cons_12m)
+boxplot(df$ln_forecast_cons_12m)
+
+boxplot(df$ln_forecast_meter_rent_12m)
+remove_outliers(df$ln_forecast_meter_rent_12m)
+boxplot(df$ln_forecast_meter_rent_12m)
+
+boxplot(df$pow_max)
+remove_outliers(df$pow_max)
+boxplot(df$pow_max)
+
+boxplot(df$ln_cons_12m)
+remove_outliers(df$ln_cons_12m)
+boxplot(df$ln_cons_12m)
+
+boxplot(df$ln_cons_gas_12m)
+remove_outliers(df$ln_cons_gas_12m)
+boxplot(df$ln_cons_gas_12m)
+
+boxplot(df$ln_cons_last_month)
+remove_outliers(df$ln_cons_last_month)
+boxplot(df$ln_cons_last_month)
+
+boxplot(df$ln_imp_cons)
+remove_outliers(df$ln_imp_cons)
+boxplot(df$ln_imp_cons)
+
+boxplot(df$margin_gross_pow_ele)
+remove_outliers(df$margin_gross_pow_ele)
+boxplot(df$margin_gross_pow_ele)
+
+boxplot(df$margin_net_pow_ele)
+remove_outliers(df$margin_net_pow_ele)
+boxplot(df$margin_net_pow_ele)
+
+boxplot(df$net_margin)
+remove_outliers(df$net_margin)
+boxplot(df$net_margin)
+
+boxplot(f$nb_prod_act)
+remove_outliers(df$nb_prod_act)
+boxplot(f$nb_prod_act)
+
+boxplot(df$months_active)
+remove_outliers(df$months_active)
+boxplot(df$months_active)
+
+boxplot(df$months_end)
+remove_outliers(df$months_end)
+boxplot(df$months_end)
+
+boxplot(df$months_modif)
+remove_outliers(df$months_modif)
+boxplot(df$months_modif)
+
+boxplot(df$months_renewal)
+remove_outliers(df$months_renewal)
+boxplot(df$months_renewal)
+
+?read.csv
 
 ##### Correlation Matrix #####
 
@@ -370,16 +448,6 @@ df_out$ln_cons_12m[df_out$ln_cons_12m %in% boxplot(df)$out] <- mean(df_out$ln_co
 str(df_out)
 
 ######################################################################
-
-remove_outliers <- function(column_name){
-  
-  outliers <- boxplot(column_name, plot=FALSE)$out
-  df_ml<- df_ml[-which(column_name %in% outliers),]
-}
-
-remove_outliers(df_ml$forecast_price_energy_p2)
-
-boxplot(df_ml$forecast_price_energy_p2)
 
 
 
