@@ -290,12 +290,15 @@ transformed_eda <- df %>%
 #          Further Data Cleaning         #
 ##########################################
 
-df_out <- df_ml
-rm.outlier(df_out$ln_cons_12m, fill = TRUE, median = FALSE)
-boxplot(df_out$ln_cons_12m)
+remove_outliers <- function(column_name){
+  
+  outliers <- boxplot(column_name, plot=FALSE)$out
+  df_ml<- df_ml[-which(column_name %in% outliers),]
+}
 
-rm.outlier(df_out$ln_imp_cons, fill = TRUE)
-boxplot(df_out$ln_imp_cons)
+remove_outliers(df_ml$forecast_price_energy_p2)
+
+boxplot(df_ml$forecast_price_energy_p2)
 
 ##### Correlation Matrix #####
 
@@ -369,21 +372,18 @@ str(df_out)
 ######################################################################
 
 remove_outliers <- function(column_name){
-# how to find outliers in r
-Q <- quantile(column_name, probs=c(.25, .75), na.rm = TRUE)
-
-# how to find outliers in r - calculate Interquartile Range
-iqr <- IQR(column_name)
-
-# how to find outliers in r - upper and lower range
-up <-  Q[2]+1.5*iqr # Upper Range  
-low<- Q[1]-1.5*iqr # Lower Range
-
-# how to remove outliers in r (the removal)
-df_out <- subset(df_out, column_name > (Q[1] - 1.5*iqr) & column_name < (Q[2]+1.5*iqr))
-
-return(df_out)
-
+  
+  outliers <- boxplot(column_name, plot=FALSE)$out
+  df_ml<- df_ml[-which(column_name %in% outliers),]
 }
 
-remove_outliers(df_out$ln_cons_12m)
+remove_outliers(df_ml$forecast_price_energy_p2)
+
+boxplot(df_ml$forecast_price_energy_p2)
+
+
+
+
+
+
+
