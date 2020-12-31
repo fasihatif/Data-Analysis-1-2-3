@@ -12,6 +12,8 @@ library(faraway)
 library(caret)
 library(car)
 library(corrplot)
+install.packages("outForest")
+library(outForest)
 
 ##########################################
 #             Data Import                #
@@ -289,94 +291,100 @@ transformed_eda <- df %>%
 ##########################################
 
 # Checkpoint for further data cleaning
-# df_ftc <- df
+#df_ftc <- df
 # df <- df_ftc
 
+# Subsetting important variables for outlier treatment
 df <- subset(df,select = -c(id,cons_12m,cons_gas_12m,cons_last_month,imp_cons,forecast_cons_12m,forecast_meter_rent_12m))
+df_other <- df %>% select(-c(forecast_price_energy_p1,forecast_price_energy_p2,forecast_price_pow_p1,margin_gross_pow_ele,margin_net_pow_ele,net_margin,pow_max,ln_cons_12m,ln_cons_gas_12m,ln_cons_last_month,ln_imp_cons,ln_forecast_cons_12m,ln_forecast_meter_rent_12m))
+df <- df %>% select(c(forecast_price_energy_p1,forecast_price_energy_p2,forecast_price_pow_p1,margin_gross_pow_ele,margin_net_pow_ele,net_margin,pow_max,ln_cons_12m,ln_cons_gas_12m,ln_cons_last_month,ln_imp_cons,ln_forecast_cons_12m,ln_forecast_meter_rent_12m))
 
+# Detecting outliers and replacing them with mean
 remove_outliers <- function(column_name){
-  
   outliers <- boxplot(column_name, plot=FALSE)$out
-  df<- df[-which(column_name %in% outliers),]
+  if(length(outliers) == 0){ df  <- df} else{
+    column_name[column_name %in% outliers] = mean(column_name,na.rm = TRUE); column_name
+  }
 }
 
-boxplot(df$forecast_price_energy_p1) 
-remove_outliers(df$forecast_price_energy_p1)
-boxplot(df$forecast_price_energy_p1)
+# Application of outlier function
+df <- data.frame(sapply(df,remove_outliers))
 
+# Join the treated dataset with rest of variables
+df <- cbind(df,df_other)
+
+# Remove all NA values and replace with mean
+df <- data.frame(sapply(df, function(x) replace(x, is.na(x), mean(x, na.rm = TRUE))))
+
+# Remove all NaN values and replace with mean
+df <- data.frame(sapply(df, function(x) replace(x, is.nan(x), mean(x, na.rm = TRUE))))
+
+# remove_outliers <- function(column_name){
+#  column_name[column_name %in% boxplot(column_name, plot = FALSE)$out] = mean(column_name,na.rm = TRUE); column_name
+#}
+
+
+
+################################## DELETE ##################################
+
+# remove_outliers(database$forecast_price_energy_p1)
+boxplot(database$forecast_price_energy_p1)
+df$forecast_price_energy_p1[is.na(df$forecast_price_energy_p1)]<- mean(df$forecast_price_energy_p1,na.rm=TRUE)
+
+# remove_outliers(df$forecast_price_energy_p2)
 boxplot(df$forecast_price_energy_p2)
-remove_outliers(df$forecast_price_energy_p2)
-boxplot(df$forecast_price_energy_p2)
+df$forecast_price_energy_p2[is.na(df$forecast_price_energy_p2)]<-mean(df$forecast_price_energy_p2,na.rm=TRUE)
 
-boxplot(df$forecast_discount_energy)
-remove_outliers(df$forecast_discount_energy)
-boxplot(df$forecast_discount_energy)
-
+# remove_outliers(df$forecast_price_pow_p1)
 boxplot(df$forecast_price_pow_p1)
-remove_outliers(df$forecast_price_pow_p1)
-boxplot(df$forecast_price_pow_p1)
+df$forecast_price_pow_p1[is.na(df$forecast_price_pow_p1)]<-mean(df$forecast_price_pow_p1,na.rm=TRUE)
 
+# remove_outliers(df$ln_forecast_cons_12m)
 boxplot(df$ln_forecast_cons_12m)
-remove_outliers(df$ln_forecast_cons_12m)
-boxplot(df$ln_forecast_cons_12m)
+df$ln_forecast_cons_12m[is.na(df$ln_forecast_cons_12m)]<-mean(df$ln_forecast_cons_12m,na.rm=TRUE)
+df$ln_forecast_cons_12m[is.nan(df$ln_forecast_cons_12m)]<-mean(df$ln_forecast_cons_12m,na.rm=TRUE)
 
+# remove_outliers(df$ln_forecast_meter_rent_12m)
 boxplot(df$ln_forecast_meter_rent_12m)
-remove_outliers(df$ln_forecast_meter_rent_12m)
-boxplot(df$ln_forecast_meter_rent_12m)
+df$ln_forecast_meter_rent_12m[is.na(df$ln_forecast_meter_rent_12m)]<-mean(df$ln_forecast_meter_rent_12m,na.rm=TRUE)
 
+# remove_outliers(df$pow_max)
 boxplot(df$pow_max)
-remove_outliers(df$pow_max)
-boxplot(df$pow_max)
+df$pow_max[is.na(df$pow_max)]<-mean(df$pow_max,na.rm=TRUE)
 
+# remove_outliers(df$ln_cons_12m)
 boxplot(df$ln_cons_12m)
-remove_outliers(df$ln_cons_12m)
-boxplot(df$ln_cons_12m)
+# df$ln_cons_12m[is.na(df$ln_cons_12m)]<-mean(df$ln_cons_12m,na.rm=TRUE)
+df$ln_cons_12m[is.nan(df$ln_cons_12m)]<-mean(df$ln_cons_12m,na.rm=TRUE)
 
+# remove_outliers(df$ln_cons_gas_12m)
 boxplot(df$ln_cons_gas_12m)
-remove_outliers(df$ln_cons_gas_12m)
-boxplot(df$ln_cons_gas_12m)
+#df$ln_cons_gas_12m[is.na(df$ln_cons_gas_12m)]<-mean(df$ln_cons_gas_12m,na.rm=TRUE)
 
+# remove_outliers(df$ln_cons_last_month)
 boxplot(df$ln_cons_last_month)
-remove_outliers(df$ln_cons_last_month)
-boxplot(df$ln_cons_last_month)
+#df$ln_cons_last_month[is.na(df$ln_cons_last_month)]<-mean(df$ln_cons_last_month,na.rm=TRUE)
+#df$ln_cons_last_month[is.nan(df$ln_cons_last_month)]<-mean(df$ln_cons_last_month,na.rm=TRUE)
 
+# remove_outliers(df$ln_imp_cons)
 boxplot(df$ln_imp_cons)
-remove_outliers(df$ln_imp_cons)
-boxplot(df$ln_imp_cons)
+#df$ln_imp_cons[is.na(df$ln_imp_cons)]<-mean(df$ln_imp_cons,na.rm=TRUE)
+# df$ln_imp_cons[is.nan(df$ln_imp_cons)]<-mean(df$ln_imp_cons,na.rm=TRUE)
 
+# remove_outliers(df$margin_gross_pow_ele)
 boxplot(df$margin_gross_pow_ele)
-remove_outliers(df$margin_gross_pow_ele)
-boxplot(df$margin_gross_pow_ele)
+# df$margin_gross_pow_ele[is.na(df$margin_gross_pow_ele)]<-mean(df$margin_gross_pow_ele,na.rm=TRUE)
 
+# remove_outliers(df$margin_net_pow_ele)
 boxplot(df$margin_net_pow_ele)
-remove_outliers(df$margin_net_pow_ele)
-boxplot(df$margin_net_pow_ele)
+# df$margin_net_pow_ele[is.na(df$margin_net_pow_ele)]<-mean(df$margin_net_pow_ele,na.rm=TRUE)
 
-boxplot(df$net_margin)
-remove_outliers(df$net_margin)
+# remove_outliers(df$net_margin)
 boxplot(df$net_margin)
 
-boxplot(f$nb_prod_act)
-remove_outliers(df$nb_prod_act)
-boxplot(f$nb_prod_act)
+########################################## DELETE #############################################
 
-boxplot(df$months_active)
-remove_outliers(df$months_active)
-boxplot(df$months_active)
 
-boxplot(df$months_end)
-remove_outliers(df$months_end)
-boxplot(df$months_end)
-
-boxplot(df$months_modif)
-remove_outliers(df$months_modif)
-boxplot(df$months_modif)
-
-boxplot(df$months_renewal)
-remove_outliers(df$months_renewal)
-boxplot(df$months_renewal)
-
-?read.csv
 
 ##### Correlation Matrix #####
 
@@ -451,7 +459,4 @@ str(df_out)
 
 
 
-
-
-
-
+ 
