@@ -12,8 +12,9 @@ library(faraway)
 library(caret)
 library(car)
 library(corrplot)
-install.packages("outForest")
 library(outForest)
+library(xgboost)
+library(Ckmeans.1d.dp) #required for xgb.ggplot.importance function in xgboost
 
 ##########################################
 #             Data Import                #
@@ -198,7 +199,7 @@ months_modif_barchart <- months_length(df$months_modif,df$churn)
 
 ##### CONSUMPTION VARIABLES EXPLORATORY ANALYSIS #####
 
-df %>%
+consumption_eda <- df %>%
   select(cons_12m,cons_gas_12m,cons_last_month,imp_cons) %>%
   keep(is.numeric) %>% 
   gather() %>% 
@@ -250,11 +251,11 @@ other_eda <- df %>%
 # take log of these variables. However, these 4 variables include negative and zero values for which log cant be taken.So 
 # we will convert negative values to NaN and add a constant 1 to these variables as well
 
-# Set negative values as NaN as log cant be taken for negative values
-df <- df %>% mutate(cons_12m = replace(cons_12m, which(cons_12m < 0), NaN))
-df <- df %>% mutate(cons_gas_12m = replace(cons_gas_12m, which(cons_gas_12m < 0), NaN))
-df <- df %>% mutate(cons_last_month = replace(cons_last_month, which(cons_last_month < 0), NaN))
-df <- df %>% mutate(imp_cons = replace(imp_cons , which(imp_cons  < 0), NaN))
+# Set negative values as Na as log cant be taken for negative values
+df <- df %>% mutate(cons_12m = replace(cons_12m, which(cons_12m < 0), NA))
+df <- df %>% mutate(cons_gas_12m = replace(cons_gas_12m, which(cons_gas_12m < 0), NA))
+df <- df %>% mutate(cons_last_month = replace(cons_last_month, which(cons_last_month < 0), NA))
+df <- df %>% mutate(imp_cons = replace(imp_cons , which(imp_cons  < 0), NA))
 
 # Add constant 1 to the variables and then take log
 df <- df %>% mutate( ln_cons_12m = log( cons_12m + 1 ),
@@ -267,8 +268,8 @@ summary(df$cons_12m)
 ##### Transformation of Forecast variables #####
 
 # Set negative values as NaN as log cant be taken for negative values
-df <- df %>% mutate(forecast_cons_12m = replace(forecast_cons_12m, which(forecast_cons_12m < 0), NaN))
-df <- df %>% mutate(forecast_meter_rent_12m = replace(forecast_meter_rent_12m, which(forecast_meter_rent_12m < 0), NaN))
+df <- df %>% mutate(forecast_cons_12m = replace(forecast_cons_12m, which(forecast_cons_12m < 0), NA))
+df <- df %>% mutate(forecast_meter_rent_12m = replace(forecast_meter_rent_12m, which(forecast_meter_rent_12m < 0), NA))
 
 
 # Add constant 1 to the variables and then take log
@@ -291,7 +292,7 @@ transformed_eda <- df %>%
 ##########################################
 
 # Checkpoint for further data cleaning
-#df_ftc <- df
+df_ftc <- df
 # df <- df_ftc
 
 # Subsetting important variables for outlier treatment
@@ -302,33 +303,33 @@ df <- df %>% select(c(forecast_price_energy_p1,forecast_price_energy_p2,forecast
 # Detecting outliers and replacing them with mean
 remove_outliers <- function(column_name){
   outliers <- boxplot(column_name, plot=FALSE)$out
-  if(length(outliers) == 0){ df  <- df} else{
+  if(length(outliers) == 0){ column_name  <- column_name} else{
     column_name[column_name %in% outliers] = mean(column_name,na.rm = TRUE); column_name
   }
 }
 
 # Application of outlier function
-df <- data.frame(sapply(df,remove_outliers))
+df <- data.frame(sapply(df, remove_outliers))
 
 # Join the treated dataset with rest of variables
 df <- cbind(df,df_other)
 
+# Save to new dataframe 'xgb_data'. The NA values in this table wont be treated for missing values as XGBoost can handle missing values internally
+df_xgb <- df
+
+# Continue on with df dataframe and treat it for missing values
 # Remove all NA values and replace with mean
 df <- data.frame(sapply(df, function(x) replace(x, is.na(x), mean(x, na.rm = TRUE))))
-
-# Remove all NaN values and replace with mean
-df <- data.frame(sapply(df, function(x) replace(x, is.nan(x), mean(x, na.rm = TRUE))))
 
 # remove_outliers <- function(column_name){
 #  column_name[column_name %in% boxplot(column_name, plot = FALSE)$out] = mean(column_name,na.rm = TRUE); column_name
 #}
 
 
-
 ################################## DELETE ##################################
 
 # remove_outliers(database$forecast_price_energy_p1)
-boxplot(database$forecast_price_energy_p1)
+boxplot(df$forecast_price_energy_p1)
 df$forecast_price_energy_p1[is.na(df$forecast_price_energy_p1)]<- mean(df$forecast_price_energy_p1,na.rm=TRUE)
 
 # remove_outliers(df$forecast_price_energy_p2)
@@ -399,11 +400,15 @@ boxplot(df$net_margin)
 
 # Remove variables that have already been transformed and no longer required. We will assign to new dataframe so we have original as backup
 # and can always come back to play with it
-df_ml <- subset(df,select = -c(id,cons_12m,cons_gas_12m,cons_last_month,imp_cons,forecast_cons_12m,forecast_meter_rent_12m))
 
-# Correlation Matrix
-cor1 <- cor(df_ml, use = "pairwise.complete.obs")
+##### Correlation Matrix for df dataframe #####
+cor1 <- cor(df, use = "pairwise.complete.obs")
 ggcorrplot::ggcorrplot(cor1, method = "square",lab = TRUE)
+
+# From the correlation matrix, we can see that 'contract_duration'& 'month_activ','num_years_antig' & 'months_end', 'margin_gross_power_ele' & 'margin_net_power_ele' have the highest correlation
+# Calculate Variance Inflation Factor using the 'car' package
+lm_model <- lm(churn ~ ., data = df)
+b <- data.frame(car::vif(lm(lm_model)))
 
 # From the correlation matrix, we can see that 'contract_duration', 'month_activ' and 'num_years_antig' and 'months_end' have the highest correlation
 # Calculate Variance Inflation Factor using the 'car' package
@@ -411,7 +416,8 @@ lm_model <- lm(churn ~ ., data = df_ml)
 car::vif(lm(lm_model))
 
 # From the VIF we can confirm that the correlations are very high and we can drop one of the variables from each correlation pair.
-df_ml <- subset(df_ml, select = -c(contract_duration,num_years_antig))
+df <- subset(df, select = -c(contract_duration,num_years_antig, margin_gross_pow_ele))
+df_xgb <- subset(df_xgb, select = -c(contract_duration,num_years_antig, margin_gross_pow_ele))
 
 ##########################################
 #             Machine Learning           #
@@ -419,15 +425,17 @@ df_ml <- subset(df_ml, select = -c(contract_duration,num_years_antig))
 
 ##### SPLIT DATA INTO TEST/TRAIN DATASET #####
 
-intrain<- createDataPartition(df_ml$churn,p=0.7,list=FALSE)
+intrain<- createDataPartition(df$churn,p=0.7,list=FALSE)
 set.seed(2017)
-train <- df_ml[intrain,]
-test <- df_ml[-intrain,]
+train <- df[intrain,]
+test <- df[-intrain,]
 
 ##### LOGISTIC REGRESSION VIA GLM() #####
 
-glm_model <- glm(churn ~ ., data = df_ml, family = binomial("logit"))
+glm_model <- glm(churn ~ ., data = df, family = binomial("logit"))
 summary(glm_model)
+
+
 
 # df_test <- subset(df, select = c(forecast_discount_energy,forecast_price_energy_p1,forecast_price_energy_p2,forecast_price_pow_p1,margin_gross_pow_ele,margin_net_pow_ele,nb_prod_act,net_margin,num_years_antig,pow_max,churn,contract_duration,months_active,months_end,months_modif,months_renewal,channel_epum,channel_ewpa,channel_fixd,channel_foos,channel_lmke,channel_sddi,channel_usil,has_gas_1,ln_cons_12m,ln_cons_gas_12m,ln_cons_last_month,ln_imp_cons,ln_forecast_cons_12m,ln_forecast_meter_rent_12m))
 # glm_model <- lm(churn~., data = df, family = binomial("logit"),control=glm.control(maxit=100))
@@ -439,7 +447,7 @@ train_control <- trainControl(method = "cv", number = 10)
 
 # train the model on training set
 glm_model_caret <- train(factor(churn)~.,
-                         data = df_test,
+                         data = df,
                          trControl = train_control,
                          method = "glm",
                          na.action = na.pass,
@@ -448,15 +456,82 @@ glm_model_caret <- train(factor(churn)~.,
 # print cv scores
 summary(glm_model_caret)
 
+anova(glm_model, test = "Chisq")
 
-na_test <- data.frame(sapply(df_out, function(y) sum(length(which(is.na(y))))))
-a <- boxplot(df_out$ln_cons_12m)$out
 
-df_out$ln_cons_12m[df_out$ln_cons_12m %in% boxplot(df)$out] <- mean(df_out$ln_cons_12m)
-str(df_out)
-
+predict_glm_caret <- predict(glm_model_caret, type = "prob")
 ######################################################################
 
+##### XGBoost #####
+
+# df_xgb_backup<- df_xgb
+# df_xgb <- df_xgb_backup
+
+intrain<- createDataPartition(df_xgb$churn,p=0.75,list=FALSE)
+set.seed(2018)
+xgb_train <- df[intrain,]
+xgb_test <- df[-intrain,]
+
+labels <- xgb_train$churn
+ts_label <- xgb_test$churn
+
+#XGBoost takes matrix for data hence we convert dataframe to matrix
+# df_xgb_backup<- df_xgb
+xgb_train <- xgb_train %>% select(-churn)
+xgb_train <- xgb.DMatrix(data = as.matrix(xgb_train),label = labels)
+
+xgb_test <- xgb_test %>% select(-churn)
+xgb_test <- xgb.DMatrix(data = as.matrix(xgb_test),label = ts_label)
+
+#default parameters
+xgb_params <- list(booster = "gbtree", 
+                   objective = "binary:logistic", 
+                   eta=0.3, gamma=0, 
+                   max_depth=6, 
+                   min_child_weight=1, 
+                   subsample=1, 
+                   colsample_bytree=1)
+
+# Calculate the best nround for this model. In addition, this function also returns CV error, which is an estimate of test error.
+xgbcv <- xgb.cv( params = xgb_params, data = xgb_train, nrounds = 500, nfold = 5, showsd = T, stratified = T, print_every_n = 10, early_stopping_rounds = 20, maximize = F, missing = NA)
 
 
- 
+elog <- as.data.frame(xgbcv$evaluation_log)
+nround <- which.min(elog$test_error_mean)
+##best iteration = 43
+## The model returned lowest error at the 21st (nround) iteration.
+# CV accuracy is 1-0.0941 = 90.6%
+
+
+xgb_model <- xgb.train(params = xgb_params, 
+                       data = xgb_train)
+#first default - model training
+xgb_model <- xgb.train (params = xgb_params, 
+                        data = xgb_train, 
+                        nrounds = nround, 
+                        watchlist = list(train=xgb_train,test=xgb_test), 
+                        print_every_n = 10, early_stop_round = 10, 
+                        maximize = F , 
+                        eval_metric = c("error","RMSE"))
+
+#model prediction
+xgbpred <- predict(xgb_model,xgb_test)
+xgbpred <- ifelse(xgbpred > 0.5,1,0)
+
+
+# The objective function binary:logistic returns output probabilities rather than labels. To convert it, we need to 
+# manually use a cutoff value. As seen above, I've used 0.5 as my cutoff value for predictions. We can calculate our model's
+# accuracy using confusionMatrix() function from caret package.
+
+#confusion matrix
+cm_xgb <- confusionMatrix (as.factor(xgbpred), as.factor(ts_label))
+#Accuracy - 86.54%` 
+
+#view variable importance plot
+mat <- xgb.importance (feature_names = colnames(df_xgb),model = xgb_model)
+
+# The ggplot-backend method also performs 1-D clustering of the importance values, with bar colors 
+# corresponding to different clusters that have somewhat similar importance values.
+xgb_feature_plot <- xgb.ggplot.importance (importance_matrix = mat)
+
+
