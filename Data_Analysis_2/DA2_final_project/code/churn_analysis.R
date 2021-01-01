@@ -15,6 +15,8 @@ library(corrplot)
 library(outForest)
 library(xgboost)
 library(Ckmeans.1d.dp) #required for xgb.ggplot.importance function in xgboost
+library(randomForest)
+library(Metrics) # To calculate AUC
 
 ##########################################
 #             Data Import                #
@@ -430,17 +432,21 @@ set.seed(2017)
 train <- df[intrain,]
 test <- df[-intrain,]
 
-##### LOGISTIC REGRESSION VIA GLM() #####
+#########################################
+##### LOGISTIC REGRESSION VIA GLM()  ####
+#########################################
 
 glm_model <- glm(churn ~ ., data = df, family = binomial("logit"))
 summary(glm_model)
 
-
-
 # df_test <- subset(df, select = c(forecast_discount_energy,forecast_price_energy_p1,forecast_price_energy_p2,forecast_price_pow_p1,margin_gross_pow_ele,margin_net_pow_ele,nb_prod_act,net_margin,num_years_antig,pow_max,churn,contract_duration,months_active,months_end,months_modif,months_renewal,channel_epum,channel_ewpa,channel_fixd,channel_foos,channel_lmke,channel_sddi,channel_usil,has_gas_1,ln_cons_12m,ln_cons_gas_12m,ln_cons_last_month,ln_imp_cons,ln_forecast_cons_12m,ln_forecast_meter_rent_12m))
 # glm_model <- lm(churn~., data = df, family = binomial("logit"),control=glm.control(maxit=100))
 
-##### LOGISTIC REGRESSION VIA CARET #####
+##########################################
+##### LOGISTIC REGRESSION VIA CARET  #####
+##########################################
+
+# Logistic Regression via Caret Package
 
 # define training control
 train_control <- trainControl(method = "cv", number = 10)
@@ -460,27 +466,31 @@ anova(glm_model, test = "Chisq")
 
 
 predict_glm_caret <- predict(glm_model_caret, type = "prob")
+
 ######################################################################
 
-##### XGBoost #####
+#########################
+##### XGBoost Model #####
+#########################
+
 
 # df_xgb_backup<- df_xgb
 # df_xgb <- df_xgb_backup
 
 intrain<- createDataPartition(df_xgb$churn,p=0.75,list=FALSE)
 set.seed(2018)
-xgb_train <- df[intrain,]
-xgb_test <- df[-intrain,]
+ml_train <- df[intrain,]
+ml_test <- df[-intrain,]
 
-labels <- xgb_train$churn
-ts_label <- xgb_test$churn
+labels <- ml_train$churn
+ts_label <- ml_test$churn
 
 #XGBoost takes matrix for data hence we convert dataframe to matrix
 # df_xgb_backup<- df_xgb
-xgb_train <- xgb_train %>% select(-churn)
+xgb_train <- ml_train %>% select(-churn)
 xgb_train <- xgb.DMatrix(data = as.matrix(xgb_train),label = labels)
 
-xgb_test <- xgb_test %>% select(-churn)
+xgb_test <- ml_test %>% select(-churn)
 xgb_test <- xgb.DMatrix(data = as.matrix(xgb_test),label = ts_label)
 
 #default parameters
@@ -534,4 +544,63 @@ mat <- xgb.importance (feature_names = colnames(df_xgb),model = xgb_model)
 # corresponding to different clusters that have somewhat similar importance values.
 xgb_feature_plot <- xgb.ggplot.importance (importance_matrix = mat)
 
+# This tells you that satisfaction level is the most important variable across all predictions, but there's no guarantee it's 
+# the most important for this particular employee. Also, good luck trying to explain what the x-axis means to your senior 
+# stakeholder. It is the Gain contribution of each feature to the model, where Gain is defined as:
 
+###############################
+##### Random Forest Model #####
+###############################
+
+# Using the common ml split data with missing values as Rbdom Forest can cater to missing values
+
+rf_train <- ml_train
+rf_test <- ml_test
+
+
+
+
+# Train a Random Forest
+rf_model <- randomForest(as.factor(churn)~., data = rf_train)
+
+# Grab OOB error matrix & take a look
+err <- rf_model$err.rate
+head(err)
+
+# Look at final OOB error rate (last row in err matrix)
+oob_err <- err[nrow(err), "OOB"]
+print(oob_err) #0.09244533 
+
+# Plot the model trained
+rf_error_model <- plot(rf_model)
+legend(x = "right", 
+       legend = colnames(err),
+       fill = 1:ncol(err))
+
+# Generate predicted classes using the rf_model object with type = "class"
+class_prediction <- predict(object = rf_model,  # model object 
+                            newdata = rf_test,  # test dataset
+                            type = "class")         # return classification labels
+
+# Calculate the confusion matrix for the test set
+cm <- confusionMatrix(data = as.factor(class_prediction),          # predicted classes
+                      reference = as.factor(rf_test$churn))  # actual classes
+print(cm)
+
+# Compare test set accuracy to OOB accuracy
+paste0("Test Accuracy: ", cm$overall[1])
+paste0("OOB Accuracy: ", 1 - oob_err)
+
+# Generate predictions on the test set with type = "prob"
+type_prediction <- predict(object = rf_model, 
+                newdata = rf_test,
+                type = "prob")
+
+# Look at the pred format
+head(type_prediction)                
+
+# Compute the AUC (`actual` must be a binary 1/0 numeric vector)
+auc(actual = rf_test$churn, 
+    predicted = type_prediction[,"yes"])                
+?randomForest
+?auc
