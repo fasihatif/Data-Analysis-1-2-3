@@ -5,18 +5,20 @@
 library(tidyverse)
 library(data.table)
 library(lubridate)
-library(fastDummies)
+library(fastDummies)   # To create fummy variables
 library(estimatr)
-library(scales)
+library(scales)        # To take logs of x and y variables
 library(faraway)
 library(caret)
-library(car)
-library(corrplot)
+library(car)           # To calculate VIF
+library(corrplot)      # To draw correlation chart
 library(outForest)
 library(xgboost)
-library(Ckmeans.1d.dp) #required for xgb.ggplot.importance function in xgboost
+library(Ckmeans.1d.dp) # Required for xgb.ggplot.importance function in xgboost
 library(randomForest)
-library(Metrics) # To calculate AUC
+library(Metrics)       # To calculate AUC
+install.packages("rangers")
+
 
 ##########################################
 #             Data Import                #
@@ -387,8 +389,6 @@ boxplot(df$net_margin)
 
 ########################################## DELETE #############################################
 
-
-
 ##### Correlation Matrix #####
 
 # When you have two independent variables that are very highly correlated, you definitely should remove one of them
@@ -451,22 +451,62 @@ summary(glm_model)
 # define training control
 train_control <- trainControl(method = "cv", number = 10)
 
+# ------------Model1-----------------
+
 # train the model on training set
-glm_model_caret <- train(factor(churn)~.,
-                         data = df,
+glm_model1 <- train(as.factor(churn)~.,
+                         data = train,
                          trControl = train_control,
                          method = "glm",
                          na.action = na.pass,
                          family=binomial())
 
-# print cv scores
-summary(glm_model_caret)
+print(glm_model1)
+summary(glm_model1)
+varImp(glm_model1, scale = FALSE)
 
-anova(glm_model, test = "Chisq")
+?varImp
+
+# ------------Model2------------------
+glm_model2 <- train(factor(churn)~. -channel_sddi -channel_fixd -channel_epum -net_margin -ln_cons_gas_12m -ln_forecast_meter_rent_12m -nb_prod_act -forecast_price_pow_p1 -months_end,
+                                  data = df,
+                                  trControl = train_control,
+                                  method = "glm",
+                                  na.action = na.pass,
+                                  family=binomial())
+
+print(glm_model2) 
+summary(glm_model2) 
+  
+# ------------Model3------------------  
+
+glm_model3 <- train(factor(churn)~. -channel_sddi -channel_fixd -channel_epum -net_margin -ln_cons_gas_12m -ln_forecast_meter_rent_12m -nb_prod_act -forecast_price_pow_p1 -months_end -channel_usil -months_modif -forecast_discount_energy -ln_forecast_cons_12m -pow_max,
+                                  data = df,
+                                  trControl = train_control,
+                                  method = "glm",
+                                  na.action = na.pass,
+                                  family=binomial())
+
+print(glm_model3)
+summary(glm_model3) 
+
+# extract out of sample performance measures
+summary(
+  resamples(
+    list(
+      model1 = glm_model1, 
+      model2 = glm_model2, 
+      model3 = glm_model3
+    )
+  )
+)$statistics$Accuracy # We use model 3 as it has a slight higher accuracy and uses lesser coefficients
+
+pred_class <- predict(glm_model3, test)
+
 
 
 predict_glm_caret <- predict(glm_model_caret, type = "prob")
-
+glm_cm <- confusionMatrix()
 ######################################################################
 
 #########################
@@ -552,12 +592,84 @@ xgb_feature_plot <- xgb.ggplot.importance (importance_matrix = mat)
 ##### Random Forest Model #####
 ###############################
 
-# Using the common ml split data with missing values as Rbdom Forest can cater to missing values
+# RandomForest(formula, ntree=n, mtry=FALSE, maxnodes = NULL)
+# Arguments:
+# - Formula: Formula of the fitted model
+# - ntree: number of trees in the forest
+# - mtry: Number of candidates draw to feed the algorithm. By default, it is the square of the number of columns.
+# - maxnodes: Set the maximum amount of terminal nodes in the forest
+# - importance=TRUE: Whether independent variables importance in the random forest be assessed
+
+# Using the common ml split data with missing values as Random Forest can cater to missing values
 
 rf_train <- ml_train
-rf_test <- ml_test
+rf_test <- ml_test 
 
+# Set K-fold cross validation settings and controls
+trControl <- trainControl(method = "cv",    # The method used to resample the datasets  
+                          number =  10,      # Number of folds to create
+                          search = "grid")  # Use the search grid method
 
+set.seed(1234)
+# Run the model with default parameters
+rf_model_caret <- train(as.factor(churn)~.,
+                    data = rf_train,
+                    method = "rf",
+                    metric = "accuracy",
+                    trControl = trControl,
+                    )
+
+?train
+
+# Print the results
+print(rf_model_caret)
+
+plot(rf_model_caret)
+
+# The algorithm uses 500 trees and tested three different values of mtry: 2, 14, 26.
+# The final value used for the model was mtry = 14 with an accuracy of 0.904. Let's try to get a higher score.
+
+# Find the best number of mtry
+# We can test the model with values of mtry from 1 to 10
+
+set.seed(1234)
+tuneGrid <- expand.grid(.mtry = c(1: 10))
+rf_mtry <- train(as.factor(churn)~.,
+                 data = rf_train,
+                 method = "rf",
+                 metric = "accuracy",
+                 tuneGrid = tuneGrid,
+                 trControl = trControl,
+                 importance = TRUE,
+                 nodesize = 14,
+                 ntree = 5)
+
+print(rf_mtry)
+
+max(rf_mtry$results$Accuracy)
+
+best_mtry <- rf_mtry$bestTune$mtry 
+
+# Maxnodes
+store_maxnode <- list()
+tuneGrid <- expand.grid(.mtry = best_mtry)
+for (maxnodes in c(5: 15)) {
+  set.seed(1234)
+  rf_maxnode <- train(as.factor(churn)~.,
+                      data = rf_train,
+                      method = "rf",
+                      metric = "oob",
+                      tuneGrid = tuneGrid,
+                      trControl = trControl,
+                      importance = TRUE,
+                      nodesize = 14,
+                      maxnodes = maxnodes,
+                      ntree = 5)
+  current_iteration <- toString(maxnodes)
+  store_maxnode[[current_iteration]] <- rf_maxnode
+}
+results_mtry <- resamples(store_maxnode)
+summary(results_mtry)
 
 
 # Train a Random Forest
@@ -583,8 +695,10 @@ class_prediction <- predict(object = rf_model,  # model object
                             type = "class")         # return classification labels
 
 # Calculate the confusion matrix for the test set
-cm <- confusionMatrix(data = as.factor(class_prediction),          # predicted classes
+cm_class <- confusionMatrix(data = as.factor(class_prediction),          # predicted classes
                       reference = as.factor(rf_test$churn))  # actual classes
+
+summary(class_prediction)
 print(cm)
 
 # Compare test set accuracy to OOB accuracy
@@ -597,10 +711,16 @@ type_prediction <- predict(object = rf_model,
                 type = "prob")
 
 # Look at the pred format
-head(type_prediction)                
+head(type_prediction)           
+
+cm_prob <- confusionMatrix(data = as.factor(type_prediction),as.factor(rf_test$churn))
 
 # Compute the AUC (`actual` must be a binary 1/0 numeric vector)
 auc(actual = rf_test$churn, 
-    predicted = type_prediction[,"yes"])                
+    predicted = type_prediction[,"0"])   
+
+
+ggplot(aes(x=churn), data=df_draft) +
+  geom_histogram(fill='dark orange')
+
 ?randomForest
-?auc
