@@ -17,8 +17,8 @@ library(xgboost)
 library(Ckmeans.1d.dp) # Required for xgb.ggplot.importance function in xgboost
 library(randomForest)
 library(Metrics)       # To calculate AUC
-install.packages("rangers")
-
+library(knitr)
+library(ggcorplot)
 
 ##########################################
 #             Data Import                #
@@ -39,6 +39,9 @@ DfChurnOutput <- read_csv(urlChurnOutput)
 ##########################################
 #         Understanding the Data         #
 ##########################################
+
+df %>% group_by(churn) %>%
+  summarize(count = n())
 
 # Look at first 5 rows of each table
 head(DfChurnOutput)
@@ -180,8 +183,8 @@ months_length <- function(column1, column2){
     summarise(months_count = n()) %>%
     mutate(status = ifelse(column2 == 1, "Churned", "Retention")) %>%
     ggplot(aes(x = column1, y = months_count, fill= factor(status))) +
-    geom_bar(stat = "identity") +
-    labs(x = "No of months*", y = "No of Companies", fill = "Status", caption = "*Reference date taken as 1st Jan 2020")
+    geom_bar(stat = "identity") + theme_bw() +
+    labs(x = NULL, y = NULL,fill = "Status")
   
   return(bar_chart)
 }
@@ -203,16 +206,15 @@ months_modif_barchart <- months_length(df$months_modif,df$churn)
 
 ##### CONSUMPTION VARIABLES EXPLORATORY ANALYSIS #####
 
+color <- "cyan3"
 consumption_eda <- df %>%
   select(cons_12m,cons_gas_12m,cons_last_month,imp_cons) %>%
   keep(is.numeric) %>% 
   gather() %>% 
   ggplot(aes(value)) +
   facet_wrap(~key, scales = "free") +
-  geom_histogram() + theme_bw()
+  geom_histogram(fill = color) + theme_bw() +labs(y = NULL, x = NULL)
 
-
-summary(df_draft$cons_last_month)
 
 ##### FORECAST VARIABLES EXPLORATORY ANALYSIS #####
 
@@ -222,7 +224,7 @@ forecast_eda <- df %>%
   gather() %>% 
   ggplot(aes(value)) +
   facet_wrap(~key, scales = "free") +
-  geom_histogram() + theme_bw()
+  geom_histogram(fill = color) + theme_bw() +labs(y = NULL, x = NULL)
 
 ##### MARGIN VARIABLES EXPLORATORY ANALYSIS #####
 
@@ -232,7 +234,7 @@ margin_eda <- df %>%
   gather() %>% 
   ggplot(aes(value)) +
   facet_wrap(~key, scales = "free") +
-  geom_histogram() + theme_bw()
+  geom_histogram(fill = color) + theme_bw() +labs(y = NULL, x = NULL)
 
 ##### OTHER VARIABLES EXPLORATORY ANALYSIS #####
 
@@ -242,7 +244,7 @@ other_eda <- df %>%
   gather() %>% 
   ggplot(aes(value)) +
   facet_wrap(~key, scales = "free") +
-  geom_histogram() + theme_bw()
+  geom_histogram(fill = color) + theme_bw() +labs(y = NULL, x = NULL)
 
 ##########################################
 #        Transformation of data          #
@@ -289,7 +291,7 @@ transformed_eda <- df %>%
   gather() %>% 
   ggplot(aes(value)) +
   facet_wrap(~key, scales = "free") +
-  geom_histogram() + theme_bw()
+  geom_histogram(fill = color) + theme_bw() +labs(y = NULL, x = NULL)
 
 ##########################################
 #          Further Data Cleaning         #
@@ -328,7 +330,6 @@ df <- data.frame(sapply(df, function(x) replace(x, is.na(x), mean(x, na.rm = TRU
 # remove_outliers <- function(column_name){
 #  column_name[column_name %in% boxplot(column_name, plot = FALSE)$out] = mean(column_name,na.rm = TRUE); column_name
 #}
-
 
 ################################## DELETE ##################################
 
@@ -405,7 +406,7 @@ boxplot(df$net_margin)
 
 ##### Correlation Matrix for df dataframe #####
 cor1 <- cor(df, use = "pairwise.complete.obs")
-ggcorrplot::ggcorrplot(cor1, method = "square",lab = TRUE)
+cor_matrix <- ggcorrplot::ggcorrplot(cor1, method = "square",lab = TRUE, type = "lower", lab_size = 2.5, digits = 1,ggtheme = theme_bw)
 
 # From the correlation matrix, we can see that 'contract_duration'& 'month_activ','num_years_antig' & 'months_end', 'margin_gross_power_ele' & 'margin_net_power_ele' have the highest correlation
 # Calculate Variance Inflation Factor using the 'car' package
@@ -414,8 +415,9 @@ b <- data.frame(car::vif(lm(lm_model)))
 
 # From the correlation matrix, we can see that 'contract_duration', 'month_activ' and 'num_years_antig' and 'months_end' have the highest correlation
 # Calculate Variance Inflation Factor using the 'car' package
-lm_model <- lm(churn ~ ., data = df_ml)
-car::vif(lm(lm_model))
+lm_model <- lm(churn ~ ., data = df)
+vif <- car::vif(lm(lm_model))
+
 
 # From the VIF we can confirm that the correlations are very high and we can drop one of the variables from each correlation pair.
 df <- subset(df, select = -c(contract_duration,num_years_antig, margin_gross_pow_ele))
@@ -427,7 +429,7 @@ df_xgb <- subset(df_xgb, select = -c(contract_duration,num_years_antig, margin_g
 
 ##### SPLIT DATA INTO TEST/TRAIN DATASET #####
 
-intrain<- createDataPartition(df$churn,p=0.7,list=FALSE)
+intrain<- createDataPartition(df$churn,p=0.75,list=FALSE)
 set.seed(2017)
 train <- df[intrain,]
 test <- df[-intrain,]
@@ -459,7 +461,7 @@ glm_model1 <- train(as.factor(churn)~.,
                          trControl = train_control,
                          method = "glm",
                          na.action = na.pass,
-                         family=binomial())
+                         family=binomial(link = "logit"))
 
 print(glm_model1)
 summary(glm_model1)
@@ -468,24 +470,24 @@ varImp(glm_model1, scale = FALSE)
 ?varImp
 
 # ------------Model2------------------
-glm_model2 <- train(factor(churn)~. -channel_sddi -channel_fixd -channel_epum -net_margin -ln_cons_gas_12m -ln_forecast_meter_rent_12m -nb_prod_act -forecast_price_pow_p1 -months_end,
+glm_model2 <- train(as.factor(churn)~. -channel_sddi -channel_fixd -channel_epum -net_margin -ln_cons_gas_12m -ln_forecast_meter_rent_12m -nb_prod_act -forecast_price_pow_p1 -months_end,
                                   data = df,
                                   trControl = train_control,
                                   method = "glm",
                                   na.action = na.pass,
-                                  family=binomial())
+                                  family=binomial(link = "logit"))
 
 print(glm_model2) 
 summary(glm_model2) 
   
 # ------------Model3------------------  
 
-glm_model3 <- train(factor(churn)~. -channel_sddi -channel_fixd -channel_epum -net_margin -ln_cons_gas_12m -ln_forecast_meter_rent_12m -nb_prod_act -forecast_price_pow_p1 -months_end -channel_usil -months_modif -forecast_discount_energy -ln_forecast_cons_12m -pow_max,
+glm_model3 <- train(as.factor(churn)~. -channel_sddi -channel_fixd -channel_epum -net_margin -ln_cons_gas_12m -ln_forecast_meter_rent_12m -nb_prod_act -forecast_price_pow_p1 -months_end -channel_usil -months_modif -forecast_discount_energy -ln_forecast_cons_12m -pow_max,
                                   data = df,
                                   trControl = train_control,
                                   method = "glm",
                                   na.action = na.pass,
-                                  family=binomial())
+                                  family=binomial(link = "logit"))
 
 print(glm_model3)
 summary(glm_model3) 
@@ -502,11 +504,15 @@ summary(
 )$statistics$Accuracy # We use model 3 as it has a slight higher accuracy and uses lesser coefficients
 
 pred_class <- predict(glm_model3, test)
+pred_class <- ifelse(a > 0.5,0,1)
+
+a <- predict.glm(glm_model,test, type = "response")
+
+table(pred_class)
+confusionMatrix(as.factor(pred_class),as.factor(test[["churn"]]))
 
 
-
-predict_glm_caret <- predict(glm_model_caret, type = "prob")
-glm_cm <- confusionMatrix()
+rmse(actual, predicted)
 ######################################################################
 
 #########################
@@ -724,3 +730,7 @@ ggplot(aes(x=churn), data=df_draft) +
   geom_histogram(fill='dark orange')
 
 ?randomForest
+
+
+
+
