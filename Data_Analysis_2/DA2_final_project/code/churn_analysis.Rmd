@@ -438,11 +438,15 @@ df_xgb <- subset(df_xgb, select = -c(contract_duration,num_years_antig, margin_g
 
 ```
 
-The missing data (**Table 1**) was very small for majority of the variables, so we were able to easily replace the missing values with mean and median approximations.Any column that had more than 30% missing observations were removed. We then conducted Feature Engineering. We converted dates into durations to make them more useful. Categorical columns were converted into dummy columns and removed reference columns. We drew a correlated matrix (**Figure 1**) to observe which pair of variables were highly correlated. Once we found the pairs, we calculated the Variance Inflation Factor (VIF) (**Table 2**) to confirm the correlation and remove one variable from the pairs.This was done to reduce multicollinearity. After getting done with our initial data cleaning and feature Engineering, we checked the distributions of the variables through histograms (**Figure 2,3,4,5,6,7**).
+The missing data (**Table 1**) was very small for majority of the variables, so we were able to easily replace the missing values with mean and median approximations.Any column that had more than 30% missing observations were removed. We then conducted Feature Engineering. We converted dates into durations to make them more useful. After getting done with our initial data cleaning and feature Engineering, we checked the distributions of the variables through histograms (**Figure 1-7**).
 
-Our exploratory data analysis shows that around 10% of the of total customers have churned (**Figure 2**). All Consumption related variables (cons\_12m ,cons\_last\_month,imp\_conscons\_gas\_12m ) and 2 of the forecast variables (forecast\_cons\_12m,forecast\_meter\_rent\_12m) are extremely right skewed (**Figure 3,4**).The values on the higher end and lower ends of the distribution are potentially outliers. Next we checked a non-parametric estimator lowess smoother to have a general idea about the functional form between a variable and churn. We will specifically focus on those variables who had skewed distributions (Figure . As expect the functional forms are very non linear and hence we took log of the 6 variables( 4 consumption and 2 forecast variables) to give the loess line a more linear shape (**Figure 8**).
+Our exploratory data analysis shows that around 10% of the of total customers have churned (**Figure 1**). All Consumption related variables (cons\_12m ,cons\_last\_month,imp\_conscons\_gas\_12m ) and 2 of the forecast variables (forecast\_cons\_12m,forecast\_meter\_rent\_12m) are extremely right skewed (**Figure 2,3**).The values on the higher end and lower ends of the distribution are potentially outliers. Next we checked a non-parametric estimator lowess smoother to have a general idea about the functional form between a variable and churn. We will specifically focus on those variables who had skewed distributions (Figure . As expect the functional forms are very non linear and hence we took log of the 6 variables( 4 consumption and 2 forecast variables) to give the loess line a more linear shape (**Figure 7**). The transformation of the log variables can be seen in (**Figure 8**).
 
 We used boxplots to tell us more about the outliers and what their values are. We then removed these values and replaced them with the mean of the respective columns values excluding the outliers.
+
+**5. Multicollinearity and Dummy Variables**
+
+When you have two independent variables that are very highly correlated, you definitely should remove one of them because you run into the multicollinearity conundrum and your regression model's regression coefficients related to the two highly correlated variables will be unreliable. We checked for multicollinearity between the explanatory variables. We drew a correlated matrix (**Figure 9**) to observe which pair of variables were highly correlated. Once we found the pairs, we calculated the Variance Inflation Factor (VIF) (**Table 2**) to confirm the correlation and remove one variable from the pairs.This was done to reduce multicollinearity. For this, we first created the correlation matrix. For pairs that have very high correlations, we will use Variance Inflation Factor to determine which variable to remove. Categorical columns ('channel\_sales' and 'has\_gas') were converted into dummy columns and the reference columns were removed.
 
 \newpage
 
@@ -470,23 +474,15 @@ kable(vif, caption = "Variance Inflation Factor (VIF) ")
 
 ## **Appendix C**
 
-**Figure 1 - Correlation Matrix**
-
-```{r correlation_matrix_chart,echo = FALSE, warning = FALSE, message = FALSE, fig.height=10,fig.width=10, fig.align="center"}
-cor_matrix + rotate_x_text(angle = 90) + font("xlab", size = 1, color = "black")+
- font("ylab", size = 1, color = "black")
-
-```
-
 \newpage
 
-**Figure:2 - Churn Rate**
+**Figure: 1 - Churn Rate**
 
 ```{r churn_rate, echo = FALSE, warning= FALSE,message= FALSE, fig.width=8,fig.height=4, fig.align="center"}
 print(churn_rate_barchart)
 ```
 
-**Figure:3 - Month Duration charts**
+**Figure: 2 - Month Duration charts**
 
 ```{r months_active_end, echo=FALSE, fig.height=4, fig.width=8, message=FALSE, warning=FALSE, fig.align="center"}
 ggarrange1 <- ggarrange(months_active_barchart,months_end_barchart,months_renewal_barchart,months_modif_barchart,
@@ -505,7 +501,7 @@ annotate_figure(ggarrange1,
 
 \newpage
 
-**Figure:4 - Consumption Variables Exploration**
+**Figure: 3 - Consumption Variables Exploration**
 
 ```{r consumption_eda, echo = FALSE, warning = FALSE, message = FALSE, fig.align="center"}
 ##### CONSUMPTION VARIABLES EXPLORATORY ANALYSIS #####
@@ -517,7 +513,7 @@ annotate_figure(consumption_eda,
 
 ```
 
-**Figure: 5 - Forecast Variables Exploration**
+**Figure: 4 - Forecast Variables Exploration**
 
 ```{r forecast_eda, echo=FALSE, message=FALSE, warning=FALSE, fig.align="center",fig.height= 5}
 annotate_figure(forecast_eda,
@@ -528,7 +524,7 @@ annotate_figure(forecast_eda,
 
 \newpage
 
-**Figure: 6 - Margin Variables Exploration**
+**Figure: 5 - Margin Variables Exploration**
 
 ```{r margin_eda, echo = FALSE, message=FALSE, warning=FALSE, fig.align="center"}
 annotate_figure(margin_eda,
@@ -537,7 +533,7 @@ annotate_figure(margin_eda,
                 left = text_grob("No of Companies", color = "black", rot = 90, face = "bold",size = 11))
 ```
 
-**Figure: 7 - Other Variables Exploration**
+**Figure: 6 - Other Variables Exploration**
 
 ```{r other_eda, echo = FALSE, message=FALSE, warning=FALSE, fig.align="center"}
 annotate_figure(other_eda,
@@ -546,7 +542,7 @@ annotate_figure(other_eda,
                 left = text_grob("No of Companies", color = "black", rot = 90, face = "bold",size = 11))
 ```
 
-**Figure: 8 - Loess/Scatterplot of Variables**
+**Figure: 7 - Loess/Scatterplot of Variables**
 
 ```{r, fig.align="center", message=FALSE, warning=FALSE, echo=FALSE}
 ggpubr::ggarrange(cons_12m_sc,ln_cons_12m_sc, nrow = 1, ncol = 2)
@@ -554,18 +550,26 @@ ggpubr::ggarrange(cons_last_month_sc,ln_cons_last_month_sc, nrow = 1, ncol = 2)
 ggpubr::ggarrange(imp_cons_sc,ln_imp_cons_sc, nrow = 1, ncol = 2)
 ggpubr::ggarrange(cons_gas_12m_sc,ln_cons_gas_12m_sc, nrow = 1, ncol = 2)
 ggpubr::ggarrange(forecast_cons_12m_sc,ln_forecast_cons_12m_sc, nrow = 1, ncol = 2)
-ggpubr::ggarrange(forecast_meter_rent_12m_sc,ln_forecast_meter_rent_12m_sc, nrow = 1, ncol = 2)
+ 
 
 
 #ln_cons_last_month_sc,imp_cons_sc,ln_imp_cons_sc,cons_gas_12m_sc,ln_cons_gas_12m_sc,forecast_cons_12m_sc, ln_forecast_cons_12m_sc,forecast_meter_rent_12m_sc,ln_forecast_meter_rent_12m_sc, nrow = 6, ncol = 2)
 
 ```
 
-**Figure:8 - Transformed Variables Exploration**
+**Figure: 8 - Transformed Variables Exploration**
 
 ```{r, echo = FALSE, warning = FALSE, message = FALSE, fig.align="center"}
 annotate_figure(transformed_eda,
                 bottom = text_grob("Value", color = "black",
                                    hjust = 8.8, x = 1, size = 11, face = "bold"),
                 left = text_grob("No of Companies", color = "black", rot = 90, face = "bold",size = 11))
+```
+
+**Figure 9 - Correlation Matrix**
+
+```{r correlation_matrix_chart,echo = FALSE, warning = FALSE, message = FALSE, fig.height=10,fig.width=10, fig.align="center"}
+cor_matrix + rotate_x_text(angle = 90) + font("xlab", size = 1, color = "black")+
+ font("ylab", size = 1, color = "black")
+
 ```
