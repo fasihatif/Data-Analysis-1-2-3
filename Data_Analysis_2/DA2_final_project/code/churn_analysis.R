@@ -28,10 +28,6 @@ library(ggcorplot)
 urlCustomerHistory <- 'https://raw.githubusercontent.com/fasihatif/Data-Analysis-1-2-3/master/Data_Analysis_2/DA2_final_project/data/CustomerDetails.csv'
 DfCustomerHistory <- read_csv(urlCustomerHistory)
 
-# Import PricingHistory.csv
-urlPricingHistory <- 'https://raw.githubusercontent.com/fasihatif/Data-Analysis-1-2-3/master/Data_Analysis_2/DA2_final_project/data/PricingHistory.csv'
-DfPricingHistory <- read_csv(urlPricingHistory)
-
 # Import ChurnOutput.csv
 urlChurnOutput <- 'https://raw.githubusercontent.com/fasihatif/Data-Analysis-1-2-3/master/Data_Analysis_2/DA2_final_project/data/ChurnOutput.csv'
 DfChurnOutput <- read_csv(urlChurnOutput)
@@ -39,9 +35,6 @@ DfChurnOutput <- read_csv(urlChurnOutput)
 ##########################################
 #         Understanding the Data         #
 ##########################################
-
-df %>% group_by(churn) %>%
-  summarize(count = n())
 
 # Look at first 5 rows of each table
 head(DfChurnOutput)
@@ -62,6 +55,9 @@ count(unique(DfChurnOutput)) #16096
 # Merge dataframes by id column since equal and has unique ids. We create a df named df_draft where we do all the working for cleaning and feature engineering
 df_draft <- merge(DfCustomerHistory,DfChurnOutput, by = 'id')
 write.csv(df_draft, "df_draft.csv")
+
+Df_draft%>% group_by(churn) %>%
+  summarize(count = n())
 
 rm(DfChurnOutput,DfCustomerHistory)
 
@@ -246,11 +242,125 @@ other_eda <- df %>%
   facet_wrap(~key, scales = "free") +
   geom_histogram(fill = color) + theme_bw() +labs(y = NULL, x = NULL)
 
+
+# Non Parametric Charts
+# cons_12m
+cons_12m_sc <- ggplot(df , aes(x = cons_12m, y = churn)) +
+  geom_point() +
+  geom_smooth(method="loess")+
+  labs(x = "cons_12m",y = "Churn", title = "Level - Level for churn~cons_12m") 
+
+ln_cons_12m_sc <- ggplot(df , aes(x = cons_12m, y = churn)) +
+  geom_point() +
+  geom_smooth(method="loess")+
+  labs(x = "cons_12m, ln scale",y = "Churn", title = "Level - log for churn~ln_cons_12m") + 
+  scale_x_continuous(trans = log_trans())
+
+# cons_last_month
+cons_last_month_sc <- ggplot(df , aes(x = cons_last_month, y = churn)) +
+  geom_point() +
+  geom_smooth(method="loess")+
+  labs(x = "cons_last_month",y = "Churn", title = "Level - Level for churn~cons_last_month") 
+
+ln_cons_last_month_sc <- ggplot(df , aes(x = cons_last_month, y = churn)) +
+  geom_point() +
+  geom_smooth(method="loess")+
+  labs(x = "cons_last_month, ln scale",y = "Churn", title = "Level - log for churn~ln_cons_last_month") + 
+  scale_x_continuous(trans = log_trans())
+
+# imp_cons
+imp_cons_sc <- ggplot(df , aes(x = imp_cons, y = churn)) +
+  geom_point() +
+  geom_smooth(method="loess") +
+  labs(x = "imp_cons",y = "Churn", title = "Level - Level for churn~imp_cons") 
+
+ln_imp_cons_sc <- ggplot(df , aes(x = imp_cons, y = churn)) +
+  geom_point() +
+  geom_smooth(method="loess")+
+  labs(x = "imp_cons, ln scale",y = "Churn", title = "Level - log for churn~ln_imp_cons") + 
+  scale_x_continuous(trans = log_trans())
+
+# cons_gas_12m
+cons_gas_12m_sc <- ggplot(df , aes(x = cons_gas_12m, y = churn)) +
+  geom_point() +
+  geom_smooth(method="loess") +
+  labs(x = "cons_gas_12m",y = "Churn", title = "Level - Level for churn~cons_gas_12m") 
+
+ln_cons_gas_12m_sc <- ggplot(df , aes(x = cons_gas_12m, y = churn)) +
+  geom_point() +
+  geom_smooth(method="loess")+
+  labs(x = "cons_gas_12m, ln scale",y = "Churn", title = "Level - log for churn~ln_cons_gas_12m") + 
+  scale_x_continuous(trans = log_trans())
+
+# forecast_cons_12m
+forecast_cons_12m_sc <- ggplot(df , aes(x = forecast_cons_12m, y = churn)) +
+  geom_point() +
+  geom_smooth(method="loess") +
+  labs(x = "forecast_cons_12m",y = "Churn", title = "Level - Level for churn~forecast_cons_12m") 
+
+ln_forecast_cons_12m_sc <- ggplot(df , aes(x = cons_gas_12m, y = churn)) +
+  geom_point() +
+  geom_smooth(method="loess")+
+  labs(x = "forecast_cons_12m, ln scale",y = "Churn", title = "Level - log for churn~ln_forecast_cons_12m") + 
+  scale_x_continuous(trans = log_trans())
+
+# forecast_meter_rent_12m
+forecast_meter_rent_12m_sc <- ggplot(df , aes(x = forecast_meter_rent_12m, y = churn)) +
+  geom_point() +
+  geom_smooth(method="loess") +
+  labs(x = "forecast_meter_rent_12m",y = "Churn", title = "Level - Level for churn~forecast_meter_rent_12m") 
+
+ln_forecast_meter_rent_12m_sc <- ggplot(df , aes(x = forecast_meter_rent_12m, y = churn)) +
+  geom_point() +
+  geom_smooth(method="loess")+
+  labs(x = "forecast_meter_rent_12m, ln scale",y = "Churn", title = "Level - log for churn~ln_forecast_meter_rent_12m") + 
+  scale_x_continuous(trans = log_trans())
+
+##########################################
+#          Further Data Cleaning         #
+##########################################
+
+# Checkpoint for further data cleaning
+df_ftc <- df
+# df <- df_ftc
+
+# Subsetting important variables for outlier treatment
+# df <- subset(df,select = -c(id,cons_12m,cons_gas_12m,cons_last_month,imp_cons,forecast_cons_12m,forecast_meter_rent_12m))
+df_other <- df %>% select(-c(forecast_price_energy_p1,forecast_price_energy_p2,forecast_price_pow_p1,margin_gross_pow_ele,margin_net_pow_ele,net_margin,pow_max,cons_12m,cons_gas_12m,cons_last_month,imp_cons,forecast_cons_12m,forecast_meter_rent_12m))
+df <- df %>% select(c(forecast_price_energy_p1,forecast_price_energy_p2,forecast_price_pow_p1,margin_gross_pow_ele,margin_net_pow_ele,net_margin,pow_max,cons_12m,cons_gas_12m,cons_last_month,imp_cons,forecast_cons_12m,forecast_meter_rent_12m))
+
+# Detecting outliers and replacing them with mean
+remove_outliers <- function(column_name){
+  outliers <- boxplot(column_name, plot=FALSE)$out
+  if(length(outliers) == 0){ column_name  <- column_name} else{
+    column_name[column_name %in% outliers] = mean(column_name,na.rm = TRUE); column_name
+  }
+}
+
+# Application of outlier function
+df <- data.frame(sapply(df, remove_outliers))
+
+# Join the treated dataset with rest of variables
+df <- cbind(df_other,df)
+
+# Continue on with df dataframe and treat it for missing values
+# Remove all NA values and replace with mean
+
+df_id <- df %>% select(id)
+df <- df %>% select(-id)
+
+# Save to new dataframe 'xgb_data'. The NA values in this table wont be treated for missing values as XGBoost can handle missing values internally
+df_xgb <- df
+
+df <- data.frame(sapply(df, function(x) replace(x, is.na(x), mean(x, na.rm = TRUE))))
+
+rm(df_other)
+
 ##########################################
 #        Transformation of data          #
 ##########################################
-# backupdf1 <- df
-
+df_logs <- df
+# df <- df_logs
 ##### Transformation of Consumption variables #####
 
 # Consumption variables are right skewed as we saw from the histograms. To make them normally distributed, we will
@@ -293,43 +403,9 @@ transformed_eda <- df %>%
   facet_wrap(~key, scales = "free") +
   geom_histogram(fill = color) + theme_bw() +labs(y = NULL, x = NULL)
 
-##########################################
-#          Further Data Cleaning         #
-##########################################
+# Remove original columns which have been transformed
+df <- df %>% select(-c(cons_12m,cons_gas_12m,cons_last_month,imp_cons,forecast_cons_12m,forecast_meter_rent_12m))
 
-# Checkpoint for further data cleaning
-df_ftc <- df
-# df <- df_ftc
-
-# Subsetting important variables for outlier treatment
-df <- subset(df,select = -c(id,cons_12m,cons_gas_12m,cons_last_month,imp_cons,forecast_cons_12m,forecast_meter_rent_12m))
-df_other <- df %>% select(-c(forecast_price_energy_p1,forecast_price_energy_p2,forecast_price_pow_p1,margin_gross_pow_ele,margin_net_pow_ele,net_margin,pow_max,ln_cons_12m,ln_cons_gas_12m,ln_cons_last_month,ln_imp_cons,ln_forecast_cons_12m,ln_forecast_meter_rent_12m))
-df <- df %>% select(c(forecast_price_energy_p1,forecast_price_energy_p2,forecast_price_pow_p1,margin_gross_pow_ele,margin_net_pow_ele,net_margin,pow_max,ln_cons_12m,ln_cons_gas_12m,ln_cons_last_month,ln_imp_cons,ln_forecast_cons_12m,ln_forecast_meter_rent_12m))
-
-# Detecting outliers and replacing them with mean
-remove_outliers <- function(column_name){
-  outliers <- boxplot(column_name, plot=FALSE)$out
-  if(length(outliers) == 0){ column_name  <- column_name} else{
-    column_name[column_name %in% outliers] = mean(column_name,na.rm = TRUE); column_name
-  }
-}
-
-# Application of outlier function
-df <- data.frame(sapply(df, remove_outliers))
-
-# Join the treated dataset with rest of variables
-df <- cbind(df,df_other)
-
-# Save to new dataframe 'xgb_data'. The NA values in this table wont be treated for missing values as XGBoost can handle missing values internally
-df_xgb <- df
-
-# Continue on with df dataframe and treat it for missing values
-# Remove all NA values and replace with mean
-df <- data.frame(sapply(df, function(x) replace(x, is.na(x), mean(x, na.rm = TRUE))))
-
-# remove_outliers <- function(column_name){
-#  column_name[column_name %in% boxplot(column_name, plot = FALSE)$out] = mean(column_name,na.rm = TRUE); column_name
-#}
 
 ################################## DELETE ##################################
 
@@ -389,7 +465,7 @@ boxplot(df$margin_net_pow_ele)
 boxplot(df$net_margin)
 
 ########################################## DELETE #############################################
-
+cor_df <- df
 ##### Correlation Matrix #####
 
 # When you have two independent variables that are very highly correlated, you definitely should remove one of them
@@ -406,18 +482,13 @@ boxplot(df$net_margin)
 
 ##### Correlation Matrix for df dataframe #####
 cor1 <- cor(df, use = "pairwise.complete.obs")
-cor_matrix <- ggcorrplot::ggcorrplot(cor1, method = "square",lab = TRUE, type = "lower", lab_size = 2.5, digits = 1,ggtheme = theme_bw)
+cor_matrix <- ggcorrplot::ggcorrplot(cor1, method = "square",lab = TRUE, type = "lower", lab_size = 2.5, digits = 2,ggtheme = theme_bw)
 
 # From the correlation matrix, we can see that 'contract_duration'& 'month_activ','num_years_antig' & 'months_end', 'margin_gross_power_ele' & 'margin_net_power_ele' have the highest correlation
 # Calculate Variance Inflation Factor using the 'car' package
 lm_model <- lm(churn ~ ., data = df)
-b <- data.frame(car::vif(lm(lm_model)))
-
-# From the correlation matrix, we can see that 'contract_duration', 'month_activ' and 'num_years_antig' and 'months_end' have the highest correlation
-# Calculate Variance Inflation Factor using the 'car' package
-lm_model <- lm(churn ~ ., data = df)
-vif <- car::vif(lm(lm_model))
-
+vif <- data.frame(car::vif(lm_model))
+vif <- rename(vif, VIF = car..vif.lm_model.)
 
 # From the VIF we can confirm that the correlations are very high and we can drop one of the variables from each correlation pair.
 df <- subset(df, select = -c(contract_duration,num_years_antig, margin_gross_pow_ele))
@@ -730,6 +801,15 @@ ggplot(aes(x=churn), data=df_draft) +
   geom_histogram(fill='dark orange')
 
 ?randomForest
+
+
+# ----------------------------------------------------------------------
+
+ggplot(df , aes(x = cons_12m, y = churn)) +
+  geom_point() +
+  geom_smooth(method="loess")+
+  labs(x = "Registered cases per capita per million, ln scale",y = "Deaths per capita per million") + 
+ scale_x_continuous(trans = log_trans())
 
 
 
