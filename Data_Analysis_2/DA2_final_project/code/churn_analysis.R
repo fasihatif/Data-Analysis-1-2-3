@@ -19,6 +19,7 @@ library(randomForest)
 library(Metrics)       # To calculate AUC
 library(knitr)
 library(ggcorplot)
+library(ROCR)
 
 ##########################################
 #             Data Import                #
@@ -39,12 +40,10 @@ DfChurnOutput <- read_csv(urlChurnOutput)
 # Look at first 5 rows of each table
 head(DfChurnOutput)
 head(DfCustomerHistory)
-head(DfPricingHistory)
 
 # Look at datatype of columns in the table
 glimpse(DfChurnOutput)
 glimpse(DfCustomerHistory)
-glimpse(DfPricingHistory)
 
 # Number of rows in DfCustomerHistory
 count(unique(DfCustomerHistory)) #16096
@@ -56,7 +55,7 @@ count(unique(DfChurnOutput)) #16096
 df_draft <- merge(DfCustomerHistory,DfChurnOutput, by = 'id')
 write.csv(df_draft, "df_draft.csv")
 
-Df_draft%>% group_by(churn) %>%
+df%>% group_by(churn) %>%
   summarize(count = n())
 
 rm(DfChurnOutput,DfCustomerHistory)
@@ -352,8 +351,6 @@ df <- df %>% select(-id)
 # Save to new dataframe 'xgb_data'. The NA values in this table wont be treated for missing values as XGBoost can handle missing values internally
 df_xgb <- df
 
-df <- data.frame(sapply(df, function(x) replace(x, is.na(x), mean(x, na.rm = TRUE))))
-
 rm(df_other)
 
 ##########################################
@@ -373,13 +370,12 @@ df <- df %>% mutate(cons_gas_12m = replace(cons_gas_12m, which(cons_gas_12m < 0)
 df <- df %>% mutate(cons_last_month = replace(cons_last_month, which(cons_last_month < 0), NA))
 df <- df %>% mutate(imp_cons = replace(imp_cons , which(imp_cons  < 0), NA))
 
-# Add constant 1 to the variables and then take log
+# Add constant 1 to the variables and then take log since some values are zero
 df <- df %>% mutate( ln_cons_12m = log( cons_12m + 1 ),
                      ln_cons_gas_12m = log( cons_gas_12m + 1),
                      ln_cons_last_month = log(cons_last_month + 1),
                      ln_imp_cons = log(imp_cons + 1)) 
 
-summary(df$cons_12m)
 
 ##### Transformation of Forecast variables #####
 
@@ -392,6 +388,8 @@ df <- df %>% mutate(forecast_meter_rent_12m = replace(forecast_meter_rent_12m, w
 df <- df %>% mutate( ln_forecast_cons_12m = log(forecast_cons_12m + 1),
                      ln_forecast_meter_rent_12m = log(forecast_meter_rent_12m + 1)) 
 
+# Fill missing values with mean
+df <- data.frame(sapply(df, function(x) replace(x, is.na(x), mean(x, na.rm = TRUE))))
 # backup2 <- df
 
 # Now check for the distribution of the transformed variables
@@ -501,7 +499,7 @@ df_xgb <- subset(df_xgb, select = -c(contract_duration,num_years_antig, margin_g
 ##### SPLIT DATA INTO TEST/TRAIN DATASET #####
 
 intrain<- createDataPartition(df$churn,p=0.75,list=FALSE)
-set.seed(2017)
+set.seed(1111)
 train <- df[intrain,]
 test <- df[-intrain,]
 
@@ -531,7 +529,6 @@ glm_model1 <- train(as.factor(churn)~.,
                          data = train,
                          trControl = train_control,
                          method = "glm",
-                         na.action = na.pass,
                          family=binomial(link = "logit"))
 
 print(glm_model1)
@@ -574,16 +571,28 @@ summary(
   )
 )$statistics$Accuracy # We use model 3 as it has a slight higher accuracy and uses lesser coefficients
 
-pred_class <- predict(glm_model3, test)
-pred_class <- ifelse(a > 0.5,0,1)
+#Caret Model  Prediction
+pred_class_test <- predict(glm_model1, newdata = test)
+pred_type_test <- predict(glm_model1, newdata = test, type = "prob")
+count(pred_class_test)
 
-a <- predict.glm(glm_model,test, type = "response")
+cm_glm <- confusionMatrix(as.factor(pred_class_test),as.factor(test$churn))
 
-table(pred_class)
-confusionMatrix(as.factor(pred_class),as.factor(test[["churn"]]))
+pred_type_test <- rename(pred_type_test, 'churned' = '1' )
+pred_type_test <- rename(pred_type_test, 'retained' = '0' )
+
+# Producing ROC curve of model
+pred_response <- predict(glm_model1, newdata = test, type = "response")
+predictFull <- prediction(pred_type_test$churned,as.factor(test$churn))
+
+# Plot AUC
+auc_roc <- performance(predictFull, measure = 'tpr',x.measure = 'fpr')
+plot(auc_roc, col = "blue")
+
+auc_score_glm <- auc(test$churn, pred_type_test$churned) #0.6221063
+rmse_score_glm <- rmse(test$churn, pred_type_test$churned) # 0.2994171
 
 
-rmse(actual, predicted)
 ######################################################################
 
 #########################
@@ -803,14 +812,87 @@ ggplot(aes(x=churn), data=df_draft) +
 ?randomForest
 
 
-# ----------------------------------------------------------------------
+###############################
+#####  Residual Analysis  #####
+###############################
 
-ggplot(df , aes(x = cons_12m, y = churn)) +
-  geom_point() +
-  geom_smooth(method="loess")+
-  labs(x = "Registered cases per capita per million, ln scale",y = "Deaths per capita per million") + 
- scale_x_continuous(trans = log_trans())
+# Get the predicted y values from the model
+df$reg_linear_y_pred <- reg_linear$fitted.values
+# Calculate the errors of the model
+df$reg_linear_res <- df$ln_deaths_per_capita - df$reg_linear_y_pred
+
+# Find countries with largest negative errors
+df %>% top_n( -5 , reg_linear_res ) %>% 
+  select( country ,death, ln_deaths_per_capita , reg_linear_y_pred, reg_linear_res )
+
+# Find countries with largest positive errors
+df %>% top_n( 5 , reg_linear_res ) %>% 
+  select( country, death,  ln_deaths_per_capita , reg_linear_y_pred, reg_linear_res )
+
+
+##################################
+##### Prediction uncertainty #####
+##################################
+
+# CI of predicted value/regression line is implemented in ggplot
+ggplot( data = df, aes( x = ln_gdppc, y = lifeexp ) ) + 
+  geom_point( color='blue') +
+  geom_smooth( method = lm , color = 'red' , se = T )
+
+##
+# You can get them by predict function
+#   interval can be any of c("none", "confidence", "prediction")
+#   alpha = 0.05 (default) is the significance level
+###
+# CI of regression line
+pred4_CI <- predict( reg4, newdata = df , interval ="confidence" , alpha = 0.05 )
+pred4_CI
+
+# If you want you can ask to calculate the SEs for each point:
+# pred4_CI <- predict( reg4, newdata = df , se.fit=T,
+#                  interval ="confidence" , alpha = 0.05 )
+
+# Hand made CI for regression line
+# 1) Add to datatset:
+df <- df %>% mutate( CI_reg4_lower = pred4_CI$fit[,2],
+                     CI_reg4_upper = pred4_CI$fit[,3] )
+# 2) Plot
+ggplot(  ) + 
+  geom_point( data = df, aes( x = ln_gdppc, y = lifeexp ) , color='blue') +
+  geom_line( data = df, aes( x = ln_gdppc, y = reg4_y_pred ) , color = 'red' , size = 1 ) +
+  geom_line( data = df, aes( x = ln_gdppc, y = CI_reg4_lower ) , color = 'green' ,
+             size = 1 , linetype = "dashed" ) +
+  geom_line( data = df, aes( x = ln_gdppc, y = CI_reg4_upper ) , color = 'black' ,
+             size = 1 , linetype = "dashed" ) +
+  labs(x = "ln( GDP/capita, 2018 int. const. $, PPP)",y = "Life expectancy  (years)") 
+
+
+##
+# Now we change to get the prediction intervals!
+#
+pred4_PI <- predict( reg4, newdata = df , interval ="prediction" , alpha = 0.05 )
+
+# Hand made Prediction Interval for regression line
+# 1) Add to datatset (You can use the SE's as well if you wish...
+#                        then alpha does not have any meaning)
+df <- df %>% mutate( PI_reg4_lower = pred4_PI$fit[,2],
+                     PI_reg4_upper = pred4_PI$fit[,3] )
+# 2) Plot
+ggplot(  ) + 
+  geom_point( data = df, aes( x = ln_gdppc, y = lifeexp ) , color='blue') +
+  geom_line( data = df, aes( x = ln_gdppc, y = reg4_y_pred ) , color = 'red' , size = 1 ) +
+  geom_line( data = df, aes( x = ln_gdppc, y = PI_reg4_lower ) , color = 'green' ,
+             size = 1 , linetype = "dotted" ) +
+  geom_line( data = df, aes( x = ln_gdppc, y = PI_reg4_upper ) , color = 'black' ,
+             size = 1 , linetype = "dotted" ) +
+  labs(x = "ln( GDP/capita, 2018 int. const. $, PPP)",y = "Life expectancy  (years)") 
 
 
 
+
+
+test_count <- sapply(train, function(y) sum(length(which(is.na(y)))))
+test_count<- data.frame(test_count)
+
+df %>% filter(is.na())
 

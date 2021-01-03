@@ -362,10 +362,7 @@ df <- df %>% select(-id)
 # Save to new dataframe 'xgb_data'. The NA values in this table wont be treated for missing values as XGBoost can handle missing values internally
 df_xgb <- df
 
-df <- data.frame(sapply(df, function(x) replace(x, is.na(x), mean(x, na.rm = TRUE))))
-
 rm(df_other)
-
 ```
 
 ```{r transformation, include=FALSE, message=FALSE, warning=FALSE}
@@ -384,13 +381,12 @@ df <- df %>% mutate(cons_gas_12m = replace(cons_gas_12m, which(cons_gas_12m < 0)
 df <- df %>% mutate(cons_last_month = replace(cons_last_month, which(cons_last_month < 0), NA))
 df <- df %>% mutate(imp_cons = replace(imp_cons , which(imp_cons  < 0), NA))
 
-# Add constant 1 to the variables and then take log
+# Add constant 1 to the variables and then take log since some values are zero
 df <- df %>% mutate( ln_cons_12m = log( cons_12m + 1 ),
                      ln_cons_gas_12m = log( cons_gas_12m + 1),
                      ln_cons_last_month = log(cons_last_month + 1),
                      ln_imp_cons = log(imp_cons + 1)) 
 
-summary(df$cons_12m)
 
 ##### Transformation of Forecast variables #####
 
@@ -403,6 +399,8 @@ df <- df %>% mutate(forecast_meter_rent_12m = replace(forecast_meter_rent_12m, w
 df <- df %>% mutate( ln_forecast_cons_12m = log(forecast_cons_12m + 1),
                      ln_forecast_meter_rent_12m = log(forecast_meter_rent_12m + 1)) 
 
+# Fill missing values with mean
+df <- data.frame(sapply(df, function(x) replace(x, is.na(x), mean(x, na.rm = TRUE))))
 # backup2 <- df
 
 # Now check for the distribution of the transformed variables
@@ -447,6 +445,119 @@ We used boxplots to tell us more about the outliers and what their values are. W
 **5. Multicollinearity and Dummy Variables**
 
 When you have two independent variables that are very highly correlated, you definitely should remove one of them because you run into the multicollinearity conundrum and your regression model's regression coefficients related to the two highly correlated variables will be unreliable. We checked for multicollinearity between the explanatory variables. We drew a correlated matrix (**Figure 9**) to observe which pair of variables were highly correlated. Once we found the pairs, we calculated the Variance Inflation Factor (VIF) (**Table 2**) to confirm the correlation and remove one variable from the pairs.This was done to reduce multicollinearity. For this, we first created the correlation matrix. For pairs that have very high correlations, we will use Variance Inflation Factor to determine which variable to remove. Categorical columns ('channel\_sales' and 'has\_gas') were converted into dummy columns and the reference columns were removed.
+
+**MACHINE LEARNING**
+
+```{r split_data, incLude = FALSE, warning= FALSE, message = FALSE}
+##### SPLIT DATA INTO TEST/TRAIN DATASET #####
+
+intrain<- createDataPartition(df$churn,p=0.75,list=FALSE)
+set.seed(2017)
+train <- df[intrain,]
+test <- df[-intrain,]
+
+```
+
+```{r,glm_caret, incLude = FALSE, warning= FALSE, message = FALSE}
+# Logistic Regression via Caret Package
+
+# define training control
+train_control <- trainControl(method = "cv", number = 10)
+
+# ------------Model1-----------------
+
+# train the model on training set
+glm_model1 <- train(as.factor(churn)~.,
+                         data = train,
+                         trControl = train_control,
+                         method = "glm",
+                         family=binomial(link = "logit"))
+
+print(glm_model1)
+summary(glm_model1)
+varImp(glm_model1, scale = FALSE)
+
+?varImp
+
+# ------------Model2------------------
+glm_model2 <- train(as.factor(churn)~. -channel_sddi -channel_fixd -channel_epum -net_margin -ln_cons_gas_12m -ln_forecast_meter_rent_12m -nb_prod_act -forecast_price_pow_p1 -months_end,
+                                  data = df,
+                                  trControl = train_control,
+                                  method = "glm",
+                                  na.action = na.pass,
+                                  family=binomial(link = "logit"))
+
+print(glm_model2) 
+summary(glm_model2) 
+  
+# ------------Model3------------------  
+
+glm_model3 <- train(as.factor(churn)~. -channel_sddi -channel_fixd -channel_epum -net_margin -ln_cons_gas_12m -ln_forecast_meter_rent_12m -nb_prod_act -forecast_price_pow_p1 -months_end -channel_usil -months_modif -forecast_discount_energy -ln_forecast_cons_12m -pow_max,
+                                  data = df,
+                                  trControl = train_control,
+                                  method = "glm",
+                                  na.action = na.pass,
+                                  family=binomial(link = "logit"))
+
+print(glm_model3)
+summary(glm_model3) 
+
+# extract out of sample performance measures
+accuracy_summary <- summary(
+  resamples(
+    list(
+      model1 = glm_model1, 
+      model2 = glm_model2, 
+      model3 = glm_model3
+    )
+  )
+)$statistics$Accuracy # We use model 1 as it has a slight higher accuracy and uses lesser coefficients
+
+#Caret Model  Prediction
+pred_class_test <- predict(glm_model1, newdata = test)
+pred_type_test <- predict(glm_model1, newdata = test, type = "prob")
+count(pred_class_test)
+
+cm_glm <- confusionMatrix(as.factor(pred_class_test),as.factor(test$churn))
+
+pred_type_test <- rename(pred_type_test, 'churned' = '1' )
+pred_type_test <- rename(pred_type_test, 'retained' = '0' )
+
+# Producing ROC curve of model
+pred_response <- predict(glm_model1, newdata = test, type = "response")
+predictFull <- prediction(pred_type_test$churned,as.factor(test$churn))
+
+# Plot AUC
+auc_roc <- performance(predictFull, measure = 'tpr',x.measure = 'fpr')
+plot(auc_roc, col = "blue")
+
+auc_score_glm <- auc(test$churn, pred_type_test$churned) #0.6221063
+rmse_score_glm <- rmse(test$churn, pred_type_test$churned) # 0.2994171
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 \newpage
 
