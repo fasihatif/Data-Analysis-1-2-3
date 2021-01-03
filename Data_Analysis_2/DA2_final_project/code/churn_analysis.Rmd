@@ -8,7 +8,7 @@ Define what is your (broad) research question! What you want to learn from the d
 want to use it?
 (a) What is the main aim: prediction or causality?
 
-```{r load_libraries, include=}
+```{r load_libraries, include= FALSE}
 ##########################################
 #               Load libraries           #
 ##########################################
@@ -28,9 +28,10 @@ library(Ckmeans.1d.dp) # Required for xgb.ggplot.importance function in xgboost
 library(randomForest)
 library(Metrics)       # To calculate AUC
 library(ggpubr)
+library(knitr)
 ```
 
-```{r data_import, include=}
+```{r data_import, include= FALSE}
 ##########################################
 #             Data Import                #
 ##########################################
@@ -48,13 +49,12 @@ urlChurnOutput <- 'https://raw.githubusercontent.com/fasihatif/Data-Analysis-1-2
 DfChurnOutput <- read_csv(urlChurnOutput)
 ```
 
-```{r merge_data, include=}
+###Understanding our Data###
+
+```{r merge_data, include= FALSE}
 ##########################################
 #         Understanding the Data         #
 ##########################################
-
-df_draft %>% group_by(churn) %>%
-  summarize(count = n())
 
 # Number of rows in DfCustomerHistory
 count(unique(DfCustomerHistory)) #16096
@@ -65,6 +65,9 @@ count(unique(DfChurnOutput)) #16096
 # Merge dataframes by id column since equal and has unique ids. We create a df named df_draft where we do all the working for cleaning and feature engineering
 df_draft <- merge(DfCustomerHistory,DfChurnOutput, by = 'id')
 
+df_draft %>% group_by(churn) %>%
+  summarize(count = n())
+
 rm(DfChurnOutput,DfCustomerHistory)
 
 # Get stats of each column
@@ -72,7 +75,7 @@ summary(df_draft) # add some analysis regarding consumption and forecasting
 
 ```
 
-```{r data_cleaning, include=}
+```{r data_cleaning, include= FALSE}
 ##########################################
 #             Cleaning the Data          #
 ##########################################
@@ -109,7 +112,7 @@ df_draft$channel_sales[is.na(df_draft$channel_sales)] <- "null_channel"
 df_draft <- df_draft %>% mutate('has_gas' =  as.numeric(has_gas))
 ```
 
-```{r feature_engineering, include=}
+```{r feature_engineering, include= FALSE}
 ##########################################
 #            Feature Engineering         #
 ##########################################
@@ -164,24 +167,315 @@ df <- df %>%
 df <- subset(df,select = -c(channel_null,has_gas_0))
 
 ```
+ 
+Our initial data consisted of 33 columns and 16096 observations in each column. The data represents the several characteristics of the company that could play an important part in their churning and retention. The data contains variables such as dates, forecasted consumption and prices, net/gross margins and churn status. It is often said that 80% of the time is spent in data cleaning and processing while just 20% is spent on running the analytics on the clean data. This saying was applicable in our case as well. There were several data quality issues such as missing values, outliers, wrong negative values, multicollinearity, and skewed variables. Our dependent variable would be the binary churn variable while the rest of the variables would act as the independent variables. 
 
-```{r}
+###Data Descriptives###
+
+```{r eda, include= FALSE}
+# Churn Rate
+churn_rate_barchart <- df %>% 
+  select(churn) %>%
+  group_by(churn) %>%
+  summarise(percentage = n()) %>%
+  mutate(Percent = round(100*percentage/sum(percentage),1)) %>%
+  mutate(status = ifelse(churn == 1, "Churned", "Retention")) %>%
+  ggplot(aes(x = "Companies", y = Percent, fill= factor(status, levels=c("Churned","Retention")))) +
+  geom_bar(stat = "identity") + geom_text(aes(label = Percent), position = position_stack(vjust = .5)) +
+  labs(x = '', fill = "Status")
+
+
+# Function to calculate no of months in the duration between a date column and reference date
+months_length <- function(column1, column2){
+  
+  dataframe <- data.frame(column1, column2)
+  
+  bar_chart <- dataframe %>%
+    group_by(column1, column2) %>%
+    summarise(months_count = n()) %>%
+    mutate(status = ifelse(column2 == 1, "Churned", "Retention")) %>%
+    ggplot(aes(x = column1, y = months_count, fill= factor(status))) +
+    geom_bar(stat = "identity") + theme_bw() +
+    labs(x = NULL, y = NULL,fill = "Status")
+  
+  return(bar_chart)
+}
+
+# Duration of contract
+contract_duration_barchart <- months_length(df$contract_duration,df$churn)
+
+# No of months passed from contract active date to reference date
+months_active_barchart <- months_length(df$months_active,df$churn)
+
+# No of months left till end date from reference date
+months_end_barchart <- months_length(df$months_end,df$churn)
+
+# No of months left till renewal from reference date
+months_renewal_barchart <- months_length(df$months_renewal,df$churn)
+
+# No of months since contract was last modified 
+months_modif_barchart <- months_length(df$months_modif,df$churn)
+
+##### CONSUMPTION VARIABLES EXPLORATORY ANALYSIS #####
+
+color <- "cyan3"
+consumption_eda <- df %>%
+  select(cons_12m,cons_gas_12m,cons_last_month,imp_cons) %>%
+  keep(is.numeric) %>% 
+  gather() %>% 
+  ggplot(aes(value)) +
+  facet_wrap(~key, scales = "free") +
+  geom_histogram(fill = color) + theme_bw() +labs(y = NULL, x = NULL)
+
+
+##### FORECAST VARIABLES EXPLORATORY ANALYSIS #####
+
+forecast_eda <- df %>%
+  select(forecast_cons_12m,forecast_discount_energy,forecast_meter_rent_12m,forecast_price_energy_p1,forecast_price_energy_p2,forecast_price_pow_p1) %>%
+  keep(is.numeric) %>% 
+  gather() %>% 
+  ggplot(aes(value)) +
+  facet_wrap(~key, scales = "free") +
+  geom_histogram(fill = color) + theme_bw() +labs(y = NULL, x = NULL)
+
+##### MARGIN VARIABLES EXPLORATORY ANALYSIS #####
+
+margin_eda <- df %>%
+  select(margin_gross_pow_ele,margin_net_pow_ele,net_margin) %>%
+  keep(is.numeric) %>% 
+  gather() %>% 
+  ggplot(aes(value)) +
+  facet_wrap(~key, scales = "free") +
+  geom_histogram(fill = color) + theme_bw() +labs(y = NULL, x = NULL)
+
+##### OTHER VARIABLES EXPLORATORY ANALYSIS #####
+
+other_eda <- df %>%
+  select(nb_prod_act,num_years_antig,pow_max) %>%
+  keep(is.numeric) %>% 
+  gather() %>% 
+  ggplot(aes(value)) +
+  facet_wrap(~key, scales = "free") +
+  geom_histogram(fill = color) + theme_bw() +labs(y = NULL, x = NULL)
 ```
 
-```{r}
+```{r lowess, include = FALSE, warning = FALSE, message = FALSE}
+# cons_12m
+cons_12m_sc <- ggplot(df , aes(x = cons_12m, y = churn)) +
+  geom_point() +
+  geom_smooth(method="loess")+
+  labs(x = "cons_12m",y = "Churn", caption = "Level - Level for churn~cons_12m") 
+
+ln_cons_12m_sc <- ggplot(df , aes(x = cons_12m, y = churn)) +
+  geom_point() +
+  geom_smooth(method="loess")+
+  labs(x = "cons_12m, ln scale",y = "Churn", caption = "Level - log for churn~ln_cons_12m") + 
+ scale_x_continuous(trans = log_trans())
+
+# cons_last_month
+cons_last_month_sc <- ggplot(df , aes(x = cons_last_month, y = churn)) +
+  geom_point() +
+  geom_smooth(method="loess")+
+  labs(x = "cons_last_month",y = "Churn", caption = "Level - Level for churn~cons_last_month") 
+
+ln_cons_last_month_sc <- ggplot(df , aes(x = cons_last_month, y = churn)) +
+  geom_point() +
+  geom_smooth(method="loess")+
+  labs(x = "cons_last_month, ln scale",y = "Churn", caption = "Level - log for churn~ln_cons_last_month") + 
+ scale_x_continuous(trans = log_trans())
+
+# imp_cons
+imp_cons_sc <- ggplot(df , aes(x = imp_cons, y = churn)) +
+  geom_point() +
+  geom_smooth(method="loess") +
+  labs(x = "imp_cons",y = "Churn", caption = "Level - Level for churn~imp_cons") 
+
+ln_imp_cons_sc <- ggplot(df , aes(x = imp_cons, y = churn)) +
+  geom_point() +
+  geom_smooth(method="loess")+
+  labs(x = "imp_cons, ln scale",y = "Churn", caption = "Level - log for churn~ln_imp_cons") + 
+ scale_x_continuous(trans = log_trans())
+
+# cons_gas_12m
+cons_gas_12m_sc <- ggplot(df , aes(x = cons_gas_12m, y = churn)) +
+  geom_point() +
+  geom_smooth(method="loess") +
+  labs(x = "cons_gas_12m",y = "Churn", caption = "Level - Level for churn~cons_gas_12m") 
+
+ln_cons_gas_12m_sc <- ggplot(df , aes(x = cons_gas_12m, y = churn)) +
+  geom_point() +
+  geom_smooth(method="loess")+
+  labs(x = "cons_gas_12m, ln scale",y = "Churn", caption = "Level - log for churn~ln_cons_gas_12m") + 
+ scale_x_continuous(trans = log_trans())
+
+# forecast_cons_12m
+forecast_cons_12m_sc <- ggplot(df , aes(x = forecast_cons_12m, y = churn)) +
+  geom_point() +
+  geom_smooth(method="loess") +
+  labs(x = "forecast_cons_12m",y = "Churn", caption = "Level - Level for churn~forecast_cons_12m") 
+
+ln_forecast_cons_12m_sc <- ggplot(df , aes(x = cons_gas_12m, y = churn)) +
+  geom_point() +
+  geom_smooth(method="loess")+
+  labs(x = "forecast_cons_12m, ln scale",y = "Churn", caption = "Level - log for churn~ln_forecast_cons_12m") + 
+ scale_x_continuous(trans = log_trans())
+
+# forecast_meter_rent_12m
+forecast_meter_rent_12m_sc <- ggplot(df , aes(x = forecast_meter_rent_12m, y = churn)) +
+  geom_point() +
+  geom_smooth(method="loess") +
+  labs(x = "forecast_meter_rent_12m",y = "Churn", caption = "Level - Level for churn~forecast_meter_rent_12m") 
+
+ln_forecast_meter_rent_12m_sc <- ggplot(df , aes(x = forecast_meter_rent_12m, y = churn)) +
+  geom_point() +
+  geom_smooth(method="loess")+
+  labs(x = "forecast_meter_rent_12m, ln scale",y = "Churn", caption = "Level - log for churn~ln_forecast_meter_rent_12m") + 
+ scale_x_continuous(trans = log_trans())
+```
+
+```{r transformation, include=FALSE, message=FALSE, warning=FALSE}
+##########################################
+#        Transformation of data          #
+##########################################
+# backupdf1 <- df
+
+##### Transformation of Consumption variables #####
+
+# Consumption variables are right skewed as we saw from the histograms. To make them normally distributed, we will
+# take log of these variables. However, these 4 variables include negative and zero values for which log cant be taken.So 
+# we will convert negative values to NaN and add a constant 1 to these variables as well
+
+# Set negative values as Na as log cant be taken for negative values
+df <- df %>% mutate(cons_12m = replace(cons_12m, which(cons_12m < 0), NA))
+df <- df %>% mutate(cons_gas_12m = replace(cons_gas_12m, which(cons_gas_12m < 0), NA))
+df <- df %>% mutate(cons_last_month = replace(cons_last_month, which(cons_last_month < 0), NA))
+df <- df %>% mutate(imp_cons = replace(imp_cons , which(imp_cons  < 0), NA))
+
+# Add constant 1 to the variables and then take log
+df <- df %>% mutate( ln_cons_12m = log( cons_12m + 1 ),
+                     ln_cons_gas_12m = log( cons_gas_12m + 1),
+                     ln_cons_last_month = log(cons_last_month + 1),
+                     ln_imp_cons = log(imp_cons + 1)) 
+
+summary(df$cons_12m)
+
+##### Transformation of Forecast variables #####
+
+# Set negative values as NaN as log cant be taken for negative values
+df <- df %>% mutate(forecast_cons_12m = replace(forecast_cons_12m, which(forecast_cons_12m < 0), NA))
+df <- df %>% mutate(forecast_meter_rent_12m = replace(forecast_meter_rent_12m, which(forecast_meter_rent_12m < 0), NA))
+
+
+# Add constant 1 to the variables and then take log
+df <- df %>% mutate( ln_forecast_cons_12m = log(forecast_cons_12m + 1),
+                     ln_forecast_meter_rent_12m = log(forecast_meter_rent_12m + 1)) 
+
+# backup2 <- df
+
+# Now check for the distribution of the transformed variables
+transformed_eda <- df %>%
+  select(ln_cons_12m,ln_cons_gas_12m,ln_cons_last_month,ln_imp_cons,ln_forecast_cons_12m,ln_forecast_meter_rent_12m) %>%
+  keep(is.numeric) %>% 
+  gather() %>% 
+  ggplot(aes(value)) +
+  facet_wrap(~key, scales = "free") +
+  geom_histogram() + theme_bw()
 
 ```
 
-\Newpage 
+```{r further_data_cleaning, include = FALSE}
+# Subsetting important variables for outlier treatment
+df <- subset(df,select = -c(id,cons_12m,cons_gas_12m,cons_last_month,imp_cons,forecast_cons_12m,forecast_meter_rent_12m))
+df_other <- df %>% select(-c(forecast_price_energy_p1,forecast_price_energy_p2,forecast_price_pow_p1,margin_gross_pow_ele,margin_net_pow_ele,net_margin,pow_max,ln_cons_12m,ln_cons_gas_12m,ln_cons_last_month,ln_imp_cons,ln_forecast_cons_12m,ln_forecast_meter_rent_12m))
+df <- df %>% select(c(forecast_price_energy_p1,forecast_price_energy_p2,forecast_price_pow_p1,margin_gross_pow_ele,margin_net_pow_ele,net_margin,pow_max,ln_cons_12m,ln_cons_gas_12m,ln_cons_last_month,ln_imp_cons,ln_forecast_cons_12m,ln_forecast_meter_rent_12m))
 
-APPENDIX
+# Detecting outliers and replacing them with mean
+remove_outliers <- function(column_name){
+  outliers <- boxplot(column_name, plot=FALSE)$out
+  if(length(outliers) == 0){ column_name  <- column_name} else{
+    column_name[column_name %in% outliers] = mean(column_name,na.rm = TRUE); column_name
+  }
+}
 
-**Figure:  - Churn Rate**
-```{r, echo = FALSE, warning= FALSE,message= FALSE, fig.width=8,fig.height=4}
+# Application of outlier function
+df <- data.frame(sapply(df, remove_outliers))
+
+# Join the treated dataset with rest of variables
+df <- cbind(df,df_other)
+
+# Save to new dataframe 'xgb_data'. The NA values in this table wont be treated for missing values as XGBoost can handle missing values internally
+df_xgb <- df
+
+# Continue on with df dataframe and treat it for missing values
+# Remove all NA values and replace with mean
+df <- data.frame(sapply(df, function(x) replace(x, is.na(x), mean(x, na.rm = TRUE))))
+
+```
+
+```{r correlation_matrix_chart, include = FALSE}
+cor1 <- cor(df, use = "pairwise.complete.obs")
+cor_matrix <- ggcorrplot::ggcorrplot(cor1, method = "square",lab = TRUE, type = "lower", lab_size = 2.5, digits = 1,ggtheme = theme_bw)
+
+# From the correlation matrix, we can see that 'contract_duration'& 'month_activ','num_years_antig' & 'months_end', 'margin_gross_power_ele' & 'margin_net_power_ele' have the highest correlation
+# Calculate Variance Inflation Factor using the 'car' package
+lm_model <- lm(churn ~ ., data = df)
+b <- data.frame(car::vif(lm(lm_model)))
+
+# From the correlation matrix, we can see that 'contract_duration', 'month_activ' and 'num_years_antig' and 'months_end' have the highest correlation
+# Calculate Variance Inflation Factor using the 'car' package
+lm_model <- lm(churn ~ ., data = df)
+vif <- car::vif(lm(lm_model))
+
+# From the VIF we can confirm that the correlations are very high and we can drop one of the variables from each correlation pair.
+df <- subset(df, select = -c(contract_duration,num_years_antig, margin_gross_pow_ele))
+df_xgb <- subset(df_xgb, select = -c(contract_duration,num_years_antig, margin_gross_pow_ele))
+```
+
+The missing data (**Table 1**) was very small for majority of the variables, so we were able to easily replace the missing values with mean and median approximations.Any column that had more than 30% missing observations were removed. We then conducted Feature Engineering. We converted dates into durations to make them more useful. Categorical columns were converted into dummy columns and removed reference columns. We drew a correlated matrix (**Figure 1**) to observe which pair of variables were highly correlated. Once we found the pairs, we calculated the Variance Inflation Factor (VIF) (**Table 2**) to confirm the correlation and remove one variable from the pairs.This was done to reduce multicollinearity. After getting done with our initial data cleaning and feature Engineering, we checked the distributions of the variables through histograms (**Figure 2,3,4,5,6,7**).
+
+Our exploratory data analysis shows that around 10% of the of total customers have churned (**Figure 2**). All Consumption related variables (cons_12m ,cons_last_month,imp_conscons_gas_12m
+) and 2 of the forecast variables (forecast_cons_12m,forecast_meter_rent_12m) are extremely right skewed (**Figure 3,4**).The values on the higher end and lower ends of the distribution are potentially outliers. Next we checked a non-parametric estimator lowess smoother to have a general idea about the functional form between  a variable and churn. We will specifically focus on those variables who had skewed distributions (Figure . As expect the functional forms are very non linear and hence we took log of the 6 variables( 4 consumption and 2 forecast variables) to give the loess line a more linear shape (**Figure 8**). We used boxplots to tell us more about the outliers and what their values are. We then removed these values and replaced them with the mean of the respective columns values excluding the outliers.
+
+
+
+\newpage 
+
+**APPENDIX A**
+
+\newpage
+
+**APPENDIX B**
+
+**Table 1 - Missing Values**
+```{r missing_values, echo=FALSE, message=FALSE, warning=FALSE}
+knitr::kable(na_count, caption = "Missing Values in each Variable")
+```
+
+\newpage
+
+**Table 2 - Variance Inflation Factor (VIF)**
+```{r vif,echo=FALSE, warning = FALSE, message = FALSE}
+kable(vif, caption = "Variance Inflation Factor (VIF) ")
+```
+
+\newpage
+
+**Appendix C**
+
+**Figure 1 - Correlation Matrix**
+```{r,echo = FALSE, warning = FALSE, message = FALSE, fig.height=10,fig.width=10, fig.align="center"}
+cor_matrix + rotate_x_text(angle = 90) + font("xlab", size = 1, color = "black")+
+ font("ylab", size = 1, color = "black")
+
+```
+\newpage
+**Figure:2  - Churn Rate**
+```{r, echo = FALSE, warning= FALSE,message= FALSE, fig.width=8,fig.height=4, fig.align="center"}
 print(churn_rate_barchart)
 ```
 
-```{r months_active_end, echo=FALSE, fig.height=4, fig.width=8, message=FALSE, warning=FALSE}
+**Figure:3  - Month Duration charts**
+```{r months_active_end, echo=FALSE, fig.height=4, fig.width=8, message=FALSE, warning=FALSE, fig.align="center"}
 ggarrange1 <- ggarrange(months_active_barchart,months_end_barchart,months_renewal_barchart,months_modif_barchart,
           nrow = 2, ncol = 2,
           common.legend = TRUE,
@@ -192,40 +486,60 @@ ggarrange1 <- ggarrange(months_active_barchart,months_end_barchart,months_renewa
 
 annotate_figure(ggarrange1,
                 bottom = text_grob("No of Months", color = "black",
-                                   hjust = 4, x = 1, size = 11, face = "bold"),
+                                   hjust = 4.3, x = 1, size = 11, face = "bold"),
                 left = text_grob("No of Companies", color = "black", rot = 90, face = "bold",size = 11))
 ```
 
-```{r consumption_eda, echo = FALSE, warning = FALSE, message = FALSE}
+\newpage
+**Figure:4  - Consumption Variables Exploration**
+```{r consumption_eda, echo = FALSE, warning = FALSE, message = FALSE, fig.align="center"}
 ##### CONSUMPTION VARIABLES EXPLORATORY ANALYSIS #####
 annotate_figure(consumption_eda,
                 bottom = text_grob("Consumption", color = "black",
-                                   hjust = 5, x = 1, size = 11, face = "bold"),
+                                   hjust =3.9, x = 1, size = 11, face = "bold"),
                 left = text_grob("No of Companies", color = "black", rot = 90, face = "bold",size = 11))
 
 
 ```
 
-```{r forecast_eda, echo=FALSE, message=FALSE, warning=FALSE}
+**Figure:5  - Forecast Variables Exploration**
+```{r forecast_eda, echo=FALSE, message=FALSE, warning=FALSE, fig.align="center"}
 annotate_figure(forecast_eda,
                 bottom = text_grob("Dollars ($)", color = "black",
                                    hjust = 5, x = 1, size = 11, face = "bold"),
                 left = text_grob("No of Companies", color = "black", rot = 90, face = "bold",size = 11))
 ```
 
-```{r margin_eda, echo = FALSE, message=FALSE, warning=FALSE}
+\newpage
+**Figure:6  - Margin Variables Exploration**
+```{r margin_eda, echo = FALSE, message=FALSE, warning=FALSE, fig.align="center"}
 annotate_figure(margin_eda,
                 bottom = text_grob("Dollars ($)", color = "black",
-                                   hjust = 4.8, x = 1, size = 11, face = "bold"),
+                                   hjust = 4.75, x = 1, size = 11, face = "bold"),
                 left = text_grob("No of Companies", color = "black", rot = 90, face = "bold",size = 11))
 ```
 
-```{r other_eda, echo = FALSE, message=FALSE, warning=FALSE}
+
+**Figure:7  - Other Variables Exploration**
+```{r other_eda, echo = FALSE, message=FALSE, warning=FALSE, fig.align="center"}
 annotate_figure(other_eda,
                 bottom = text_grob("Value", color = "black",
                                    hjust = 8.8, x = 1, size = 11, face = "bold"),
                 left = text_grob("No of Companies", color = "black", rot = 90, face = "bold",size = 11))
 ```
 
+**Figure:8  - Loess/Scatterplot of variables**
+```{r}
+ggarrange(cons_12m_sc,ln_cons_12m_sc,cons_last_month_sc,ln_cons_last_month_sc,imp_cons_sc,ln_imp_cons_sc,cons_gas_12m_sc,ln_cons_gas_12m_sc,forecast_cons_12m_sc, ln_forecast_cons_12m_sc,forecast_meter_rent_12m_sc,ln_forecast_meter_rent_12m_sc, nrow = 6, ncol = 2)
+
+```
+
+**Figure:8 - Transformed Variables Exploration**
+```{r, echo = FALSE, warning = FALSE, message = FALSE, fig.align="center"}
+annotate_figure(transformed_eda,
+                bottom = text_grob("Value", color = "black",
+                                   hjust = 8.8, x = 1, size = 11, face = "bold"),
+                left = text_grob("No of Companies", color = "black", rot = 90, face = "bold",size = 11))
+```
 
 

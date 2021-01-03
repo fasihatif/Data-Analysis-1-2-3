@@ -1,0 +1,34 @@
+Category,Variable,Description
+customer,id,contact id
+customer,activity_new,category of the company's activity
+customer,campaign_disc_ele,code of the electricity campaign the customer last subscribed to
+customer,channel_sales,code of the sales channel
+consumption,cons_12m,electricity consumption of the past 12 months
+consumption,cons_gas_12m,gas consumption of the past 12 months
+consumption,cons_last_month,electricity consumption of the last month
+consumption,imp_cons,current paid consumption
+date,date_activ,date of activation of the contract
+date,date_end,registered date of the end of the contract
+date,date_first_active,date of first contract of the client
+date,date_modif_product,date of last modification of the product
+date,date_renewal,date of the next contract renewal
+forecast,forecast_base_bill_ele,forecasted electricity bill baseline for next month
+forecast,forecast_base_bill_year,forecasted electricity bill baseline for calendar year
+forecast,forecast_bill_12m,forecasted electricity bill baseline for 12 months
+forecast,forecast_cons,forecasted electricity consumption for next month
+forecast,forecast_cons_12m,forecasted electricity consumption for next 12 months
+forecast,forecast_cons_year,forecasted electricity consumption for next calendar year
+forecast,forecast_discount_energy,forecasted value of current discount
+forecast,forecast_meter_rent_12m,forecasted bill of meter rental for the next 12 months
+forecast,forecast_price_energy_p1,forecasted energy price for 1st period
+forecast,forecast_price_energy_p2,forecasted energy price for 2nd period
+forecast,forecast_price_pow_p1,forecasted power price for 1st period
+margin,margin_gross_pow_ele,gross margin on power subscription
+margin,margin_net_pow_ele,net margin on power subscription
+margin,net_margin,total net margin
+other,has_gas,is customer a gas customer as well
+other,nb_prod_act,number of active products and services
+other,num_years_antig,antiquity of the client (in number of years)
+other,origin_up,code of the electricity campaign the customer first subscribed to
+other,pow_max,subscribed power
+other,churned,has the client churned over the next 3 months
