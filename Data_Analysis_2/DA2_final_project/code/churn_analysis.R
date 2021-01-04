@@ -5,7 +5,7 @@
 library(tidyverse)
 library(data.table)
 library(lubridate)
-library(fastDummies)   # To create fummy variables
+library(fastDummies)   # To create dummy variables
 library(estimatr)
 library(scales)        # To take logs of x and y variables
 library(faraway)
@@ -20,6 +20,13 @@ library(Metrics)       # To calculate AUC
 library(knitr)
 library(ggcorplot)
 library(ROCR)
+library(DataExplorer)
+library(dplyr)
+library(stargazer)
+library(mfx)
+library(modelsummary)
+library(pCOR)
+
 
 ##########################################
 #             Data Import                #
@@ -36,6 +43,11 @@ DfChurnOutput <- read_csv(urlChurnOutput)
 ##########################################
 #         Understanding the Data         #
 ##########################################
+
+plot_intro_bar <- plot_intro(df_draft, 
+           title ="Intro Plot", 
+           ggtheme =theme_bw(),
+           theme_config=theme(legend.position="bottom"))
 
 # Look at first 5 rows of each table
 head(DfChurnOutput)
@@ -348,9 +360,6 @@ df <- cbind(df_other,df)
 df_id <- df %>% select(id)
 df <- df %>% select(-id)
 
-# Save to new dataframe 'xgb_data'. The NA values in this table wont be treated for missing values as XGBoost can handle missing values internally
-df_xgb <- df
-
 rm(df_other)
 
 ##########################################
@@ -489,108 +498,148 @@ vif <- data.frame(car::vif(lm_model))
 vif <- rename(vif, VIF = car..vif.lm_model.)
 
 # From the VIF we can confirm that the correlations are very high and we can drop one of the variables from each correlation pair.
-df <- subset(df, select = -c(contract_duration,num_years_antig, margin_gross_pow_ele))
-df_xgb <- subset(df_xgb, select = -c(contract_duration,num_years_antig, margin_gross_pow_ele))
+df <- subset(df, select = -c(contract_duration,num_years_antig, margin_gross_pow_ele,ln_cons_gas_12m))
+df <- subset(df, select = -c(channel_fixd))
 
 ##########################################
 #             Machine Learning           #
 ##########################################
 
-##### SPLIT DATA INTO TEST/TRAIN DATASET #####
+df$churn <- as.factor(df$churn)
 
-intrain<- createDataPartition(df$churn,p=0.75,list=FALSE)
+##### SPLIT DATA INTO TEST/TRAIN DATASET #####
 set.seed(1111)
+intrain<- createDataPartition(df$churn,p=0.75,list=FALSE)
 train <- df[intrain,]
 test <- df[-intrain,]
+
+
+##########################################
+#         Linear Probability Model       #
+##########################################
+
+train_lpm <- test
+test_lpm <- test
+
+train_lpm$churn <- as.numeric(train_lpm$churn)
+test_lpm$churn <- as.numeric(test_lpm$churn)
+
+##### SPLIT DATA INTO TEST/TRAIN DATASET #####
+
+lp_model <-lm(churn ~ ., data = train_lpm)
+summary(lp_model)
+
+# Save the model output
+ lp_table <- huxtable::huxreg(lp_model)
+
+# Check predicted probabilities: is there any interesting values?
+# predicted probabilities
+test$pred_lpm <- predict(lp_model,test_lpm )
+# Make a descriptive summary of the predictions!
+summary(pred_lpm )
+
+# Show the predicted probabilities' distribution (ggplot)
+lpm_pred_prob <- ggplot( test , aes( x = pred_lpm ) ) +
+  geom_histogram(fill = 'cyan3', color = 'black') + theme_bw() + labs(title = "Predicted Probabilities -LPM Model")
 
 #########################################
 ##### LOGISTIC REGRESSION VIA GLM()  ####
 #########################################
 
-glm_model <- glm(churn ~ ., data = df, family = binomial("logit"))
-summary(glm_model)
+glm_train <- train
+glm_test <- test
 
-# df_test <- subset(df, select = c(forecast_discount_energy,forecast_price_energy_p1,forecast_price_energy_p2,forecast_price_pow_p1,margin_gross_pow_ele,margin_net_pow_ele,nb_prod_act,net_margin,num_years_antig,pow_max,churn,contract_duration,months_active,months_end,months_modif,months_renewal,channel_epum,channel_ewpa,channel_fixd,channel_foos,channel_lmke,channel_sddi,channel_usil,has_gas_1,ln_cons_12m,ln_cons_gas_12m,ln_cons_last_month,ln_imp_cons,ln_forecast_cons_12m,ln_forecast_meter_rent_12m))
-# glm_model <- lm(churn~., data = df, family = binomial("logit"),control=glm.control(maxit=100))
+# Logit Model 1
+logit_model1 <- glm(as.factor(churn) ~ ., data = glm_train, family = binomial("logit"))
 
-##########################################
-##### LOGISTIC REGRESSION VIA CARET  #####
-##########################################
+# Logit Model 2
+logit_model2 <- glm(as.factor(churn)~. -channel_sddi -channel_epum -net_margin -ln_forecast_meter_rent_12m -nb_prod_act -forecast_price_pow_p1 -months_end, data = glm_train, family = binomial("logit"))
 
-# Logistic Regression via Caret Package
+# Probit Model 1
+probit_model <- glm(as.factor(churn)~., data = glm_train, family = binomial("probit"))
 
-# define training control
-train_control <- trainControl(method = "cv", number = 10)
 
-# ------------Model1-----------------
+# Model  Prediction with Logit
+pred_type_test_l <- predict(logit_model2, newdata = glm_test, type = "response")
+pred_type_logit <- pred_type_test_l
+glm_test <- cbind(pred_type_test_l,test)
+pred_type_test_l <- ifelse(pred_type_test_l > 0.5, 1, 0)
 
-# train the model on training set
-glm_model1 <- train(as.factor(churn)~.,
-                         data = train,
-                         trControl = train_control,
-                         method = "glm",
-                         family=binomial(link = "logit"))
+# Marginal Differences Logit
+# Calculate logit marginal differences
+logit_marg <- logitmfx(as.factor(churn)~., data=glm_train, atmean=FALSE, robust = T)
+print(logit_marg)
 
-print(glm_model1)
-summary(glm_model1)
-varImp(glm_model1, scale = FALSE)
+#Model Prediction with Probit
+pred_type_logit  <- predict(glm_model1, newdata = glm_test, type = "response")
+glm_test <- cbind(pred_type_logit,test)
 
-?varImp
+# Calculate probit marginal differences
+probit_marg <- probitmfx(as.factor(churn)~., data=glm_train, atmean=FALSE, robust = T)
+print( probit_marg )
 
-# ------------Model2------------------
-glm_model2 <- train(as.factor(churn)~. -channel_sddi -channel_fixd -channel_epum -net_margin -ln_cons_gas_12m -ln_forecast_meter_rent_12m -nb_prod_act -forecast_price_pow_p1 -months_end,
-                                  data = df,
-                                  trControl = train_control,
-                                  method = "glm",
-                                  na.action = na.pass,
-                                  family=binomial(link = "logit"))
+#Save models
+w_dir <- 'C:/Users/abc/OneDrive/Business_Analytics/Data-Analysis-1-2-3/Data_Analysis_2/DA2_final_project/out/'
+cm <- c('(Intercept)' = 'Constant')
+pmodels <- list(logit_model1, logit_model2,logit_marg, probit_model, probit_marg)
+msummary( pmodels ,
+          fmt="%.3f",
+          gof_omit = 'DF|Deviance|Log.Lik.|F|R2 Adj.|AIC|BIC|R2|PseudoR2',
+          stars=c('*' = .05, '**' = .01),
+          coef_rename = cm,
+          coef_omit = 'as.factor(churn)*',
+          output = paste0(w_dir,"prob_models_coeff.html")
+)
+?msummary
 
-print(glm_model2) 
-summary(glm_model2) 
-  
-# ------------Model3------------------  
 
-glm_model3 <- train(as.factor(churn)~. -channel_sddi -channel_fixd -channel_epum -net_margin -ln_cons_gas_12m -ln_forecast_meter_rent_12m -nb_prod_act -forecast_price_pow_p1 -months_end -channel_usil -months_modif -forecast_discount_energy -ln_forecast_cons_12m -pow_max,
-                                  data = df,
-                                  trControl = train_control,
-                                  method = "glm",
-                                  na.action = na.pass,
-                                  family=binomial(link = "logit"))
+# Confusion Matrix
+cm_glm <- confusionMatrix(as.factor(pred_type_test_l),as.factor(glm_test$churn))
 
-print(glm_model3)
-summary(glm_model3) 
-
-# extract out of sample performance measures
-summary(
-  resamples(
-    list(
-      model1 = glm_model1, 
-      model2 = glm_model2, 
-      model3 = glm_model3
-    )
-  )
-)$statistics$Accuracy # We use model 3 as it has a slight higher accuracy and uses lesser coefficients
-
-#Caret Model  Prediction
-pred_class_test <- predict(glm_model1, newdata = test)
-pred_type_test <- predict(glm_model1, newdata = test, type = "prob")
-count(pred_class_test)
-
-cm_glm <- confusionMatrix(as.factor(pred_class_test),as.factor(test$churn))
-
-pred_type_test <- rename(pred_type_test, 'churned' = '1' )
-pred_type_test <- rename(pred_type_test, 'retained' = '0' )
 
 # Producing ROC curve of model
-pred_response <- predict(glm_model1, newdata = test, type = "response")
-predictFull <- prediction(pred_type_test$churned,as.factor(test$churn))
+#pred_response <- predict(glm_model1, newdata = test, type = "response")
+predictFull <- prediction(pred_type_test_l,as.factor(glm_test$churn))
 
 # Plot AUC
 auc_roc <- performance(predictFull, measure = 'tpr',x.measure = 'fpr')
 plot(auc_roc, col = "blue")
 
-auc_score_glm <- auc(test$churn, pred_type_test$churned) #0.6221063
-rmse_score_glm <- rmse(test$churn, pred_type_test$churned) # 0.2994171
+auc_score_glm <- auc(glm_test$churn, pred_type_test_l) #0.6221063
+rmse_score_glm <- rmse(glm_test$churn, pred_type_test_l) # 0.2994171
+
+
+
+# -----------------------------------------------------------------------
+  # Biased prediction? Calculate bias!
+  #   Hint: bias = mean(prediction) - mean(actual)
+glm_test <- glm_test %>% mutate(churn = as.integer(glm_test$churn))
+
+  bias <- mean(pred_type) - mean(as.numeric(glm_test$churn))
+# 
+
+# Note dplyr:: is important to specify which package's 'select' is used!
+actual_vs_predicted <- glm_test %>%
+  ungroup %>%
+  dplyr::select(actual = (churn), 
+                predicted = pred_type)
+num_groups <- 10
+
+calibration_d <- actual_vs_predicted %>%
+  mutate(predicted_score_group = dplyr::ntile(predicted, num_groups))%>%
+  group_by(predicted_score_group) %>%
+  dplyr::summarise(mean_actual = mean(actual), 
+                   mean_predicted = mean(predicted), 
+                   num_obs = n())
+
+#calibration chart
+  
+  ggplot( calibration_d,aes(x = mean_actual, y = mean_predicted)) +
+    geom_line(  color='red', size=1  , alpha=0.8) +
+    geom_point( color='red', size=1.5, alpha=0.8) +
+    labs( x = "Actual event probability", y = "Predicted event probability")  +
+    scale_x_continuous() + scale_y_continuous() + 
+    geom_abline(color='blue', slope = 1, intercept = 0.10)
 
 
 ######################################################################
@@ -602,14 +651,18 @@ rmse_score_glm <- rmse(test$churn, pred_type_test$churned) # 0.2994171
 
 # df_xgb_backup<- df_xgb
 # df_xgb <- df_xgb_backup
+df_xgb
 
-intrain<- createDataPartition(df_xgb$churn,p=0.75,list=FALSE)
 set.seed(2018)
+intrain<- createDataPartition(df_xgb$churn,p=0.75,list=FALSE)
 ml_train <- df[intrain,]
 ml_test <- df[-intrain,]
 
 labels <- ml_train$churn
 ts_label <- ml_test$churn
+
+labels <- as.numeric(as.character(labels))
+ts_label <- as.numeric(as.character(ts_label))
 
 #XGBoost takes matrix for data hence we convert dataframe to matrix
 # df_xgb_backup<- df_xgb
@@ -629,37 +682,42 @@ xgb_params <- list(booster = "gbtree",
                    colsample_bytree=1)
 
 # Calculate the best nround for this model. In addition, this function also returns CV error, which is an estimate of test error.
+set.seed(2018)
 xgbcv <- xgb.cv( params = xgb_params, data = xgb_train, nrounds = 500, nfold = 5, showsd = T, stratified = T, print_every_n = 10, early_stopping_rounds = 20, maximize = F, missing = NA)
-
+# Iteration 47 gave lowest test error
 
 elog <- as.data.frame(xgbcv$evaluation_log)
 nround <- which.min(elog$test_error_mean)
-##best iteration = 43
-## The model returned lowest error at the 21st (nround) iteration.
-# CV accuracy is 1-0.0941 = 90.6%
+##best iteration = 47
+## The model returned lowest error at the 47th (nround) iteration.
+# CV accuracy is 1-0.0968 = 90.32%
 
 
-xgb_model <- xgb.train(params = xgb_params, 
-                       data = xgb_train)
 #first default - model training
-xgb_model <- xgb.train (params = xgb_params, 
+xgb_model <- xgb.train(params = xgb_params, 
                         data = xgb_train, 
                         nrounds = nround, 
                         watchlist = list(train=xgb_train,test=xgb_test), 
                         print_every_n = 10, early_stop_round = 10, 
                         maximize = F , 
-                        eval_metric = c("error","RMSE"))
+                        eval_metric = "error")
 
+summary(xgb_model)
 #model prediction
 xgbpred <- predict(xgb_model,xgb_test)
-xgbpred <- ifelse(xgbpred > 0.5,1,0)
 
+summary(xgbpred)
 
 # The objective function binary:logistic returns output probabilities rather than labels. To convert it, we need to 
 # manually use a cutoff value. As seen above, I've used 0.5 as my cutoff value for predictions. We can calculate our model's
 # accuracy using confusionMatrix() function from caret package.
 
+
+pred_type_test <- rename(pred_type_test, 'churned' = '1' )
+pred_type_test <- rename(pred_type_test, 'retained' = '0' )
+
 #confusion matrix
+xgbpred <- ifelse(xgbpred > 0.5,1,0)
 cm_xgb <- confusionMatrix (as.factor(xgbpred), as.factor(ts_label))
 #Accuracy - 86.54%` 
 
@@ -673,6 +731,12 @@ xgb_feature_plot <- xgb.ggplot.importance (importance_matrix = mat)
 # This tells you that satisfaction level is the most important variable across all predictions, but there's no guarantee it's 
 # the most important for this particular employee. Also, good luck trying to explain what the x-axis means to your senior 
 # stakeholder. It is the Gain contribution of each feature to the model, where Gain is defined as:
+
+library(Metrics) 
+roc_test <- roc(ts_label, xgbpred, algorithm = 2)
+roc_xgb <- plot(roc_test) 
+auc_xgb <- auc(ts_label, xgbpred) #0.5684948
+rmse_xgb <- rmse(ts_label, xgbpred) # 0.2953
 
 ###############################
 ##### Random Forest Model #####
@@ -817,7 +881,7 @@ ggplot(aes(x=churn), data=df_draft) +
 ###############################
 
 # Get the predicted y values from the model
-df$reg_linear_y_pred <- reg_linear$fitted.values
+df$glm_y_pred <- glm_model1$fitted.values
 # Calculate the errors of the model
 df$reg_linear_res <- df$ln_deaths_per_capita - df$reg_linear_y_pred
 
@@ -889,10 +953,4 @@ ggplot(  ) +
 
 
 
-
-
-test_count <- sapply(train, function(y) sum(length(which(is.na(y)))))
-test_count<- data.frame(test_count)
-
-df %>% filter(is.na())
 
