@@ -1,12 +1,8 @@
 ---
 title: "Churn Prediction -  PowerCo."
 author: "Fasih Atif"
-output: 
-  pdf_document: 
-    fig_height: 4
-header-includes:
-  - \usepackage{titling}
-  - \setlength{\droptitle}{-5em}
+date: "1/4/2021"
+output: pdf_document
 ---
 
 ## Background
@@ -17,9 +13,16 @@ PowerCo is a major gas and electricity utility that supplies to corporate, SME (
 ##########################################
 #               Load libraries           #
 ##########################################
-library(tidyverse)
+
+# Set Cran mirror to avoid error
+local({r <- getOption("repos")
+       r["CRAN"] <- "http://cran.r-project.org" 
+       options(repos=r)
+})
+
 library(data.table)
 library(lubridate)
+library(kableExtra)
 library(fastDummies)   # To create fummy variables
 library(estimatr)
 library(scales)        # To take logs of x and y variables
@@ -30,17 +33,18 @@ library(ggcorrplot)      # To draw correlation chart
 library(outForest)
 library(xgboost)
 library(Ckmeans.1d.dp) # Required for xgb.ggplot.importance function in xgboost
-library(randomForest)
 library(Metrics)       # To calculate AUC
 library(ggpubr)
 library(knitr)
 library(pROC)
 library(DataExplorer)
-library(stargazer)
+library(huxtable)
+library(jtools)
 library(mfx)
 library(modelsummary)
 library(ROCR)
 library(dplyr)
+library(tidyverse)
 ```
 
 ```{r data_import, include= FALSE}
@@ -79,7 +83,6 @@ rm(DfChurnOutput,DfCustomerHistory)
 
 # Get stats of each column
 summary(df_draft) # add some analysis regarding consumption and forecasting
-
 ```
 
 ```{r data_cleaning, include= FALSE, warning = FALSE, message = FALSE}
@@ -419,7 +422,6 @@ transformed_eda <- df %>%
 # Remove original columns which have been transformed
 df <- df %>% dplyr::select(-c(cons_12m,cons_gas_12m,cons_last_month,imp_cons,forecast_cons_12m,forecast_meter_rent_12m))
 
-
 ```
 
 ```{r correlation_matrix, include = FALSE, warning = FALSE, message = FALSE}
@@ -461,7 +463,7 @@ test <- df[-intrain,]
 
 ```
 
-```{r sum_stat, include = FALSE}
+```{r sum_stat, include = FALSE, warning= FALSE,message = FALSE}
 sum_stat <- function( df , var_names , stats , num_obs = TRUE ){
   k <- length( var_names )
   built_in_stat <- c('mean','median','mode','min','max','1st_qu.','3rd_qu',
@@ -534,14 +536,13 @@ sum_stat <- function( df , var_names , stats , num_obs = TRUE ){
 
 I devised the following equation that will be used in the models:
 
-![](C:/Users/abc/AppData/Local/RStudio/tmp/paste-E4AFA280.png)
+![](images/equation.jpg)
 
 ## **Linear probability Model**
 
 Now that our data is ready for analysis we will start off with same basic probability models such as the Linear Probability Model.We split the data into train and test groups in a 75/25 ratio. The produced coefficients for this model can been see in (**Table 3**). We used the model to predict on the test set. The probability distribution is centered around 1.1 (**Figure 11**). Probability values are between 0 and 1 but in our model, half of our probabilities are greater than 1. This is a drawback of the model. Nevertheless, we will try to study the characteristics of the top 1% customers who have the highest and lowest probability of leaving. The results are shown in (**Table 4**). The AIC for the model was 4893.13 and BIC was 5092.895.
 
 ```{r lpm, include = FALSE, warning= FALSE, message = FALSE}
-
 ##########################################
 #         Linear Probability Model       #
 ##########################################
@@ -558,9 +559,6 @@ lp_model <-lm(churn ~ ., data = train_lpm)
 summary(lp_model)
 print(lp_model)
 
-# Save the model output
- lp_table <- huxtable::huxreg(lp_model)
-
 # Check predicted probabilities: is there any interesting values?
 # predicted probabilities
 test_lpm$pred_lpm <- predict(lp_model,test_lpm )
@@ -576,20 +574,23 @@ test_lpm <- test_lpm %>%
 
 # Top 1%
 t1 <- sum_stat( subset(test_lpm , q100_pred_lpm==100 ) , 
-                c('forecast_discount_energy','nb_prod_act','months_active', 'months_end', 'months_modif', 'months_renewal', 'channel_epum', 'channel_ewpa','channel_foos' , 'channel_lmke', 'channel_sddi', 'channel_usil','has_gas_1','forecast_price_energy_p1','forecast_price_energy_p2','forecast_price_pow_p1','margin_net_pow_ele','net_margin','pow_max','ln_cons_12m','ln_cons_last_month','ln_imp_cons','ln_forecast_cons_12m','ln_forecast_meter_rent_12m' ),
+                c('forecast_price_pow_p1', 'ln_forecast_cons_12m',
+                  'pow_max','margin_net_pow_ele','net_margin'),
                 c('mean','median','sd'),
                 num_obs = F )
 t1
 
 # Bottom 1%
 b1 <- sum_stat( subset( test_lpm , q100_pred_lpm==1 ) , 
-                c('forecast_discount_energy','nb_prod_act','months_active', 'months_end', 'months_modif', 'months_renewal', 'channel_epum', 'channel_ewpa','channel_foos' , 'channel_lmke', 'channel_sddi', 'channel_usil','has_gas_1','forecast_price_energy_p1','forecast_price_energy_p2','forecast_price_pow_p1','margin_net_pow_ele','net_margin','pow_max','ln_cons_12m','ln_cons_last_month','ln_imp_cons','ln_forecast_cons_12m','ln_forecast_meter_rent_12m' ),
+                c('forecast_price_pow_p1', 'ln_forecast_cons_12m',
+                  'pow_max','margin_net_pow_ele','net_margin' ),
                 c('mean','median','sd'),
                 num_obs = F )
 b1
 
 AIC(lp_model)
 BIC(lp_model)
+
 
 ```
 
@@ -672,13 +673,13 @@ The AIC for logit model is 7593.75 and BIC was 7786.119. The AIC for Probit mode
 
 The confusion matrix is shown below:
 
-![](C:/Users/abc/AppData/Local/RStudio/tmp/paste-1CD9D45B.png)
+![](C:/Users/abc/AppData/Local/RStudio/tmp/paste-1CD9D45B.png){width="220"}
 
 It shows that our model predicted correctly with an accuracy of 90.1%. We also drew an ROC curve (**Figure 12**) and computed the AUC validated which turned out to be 0.5. The model can be greatly improved if more work is done on this.
 
 ## XGBoost Model
 
-```{r xgboost, echo = FALSE, message = FALSE, warning = FALSE}
+```{r xgboost, include = FALSE, message = FALSE, warning = FALSE}
 
 set.seed(2018)
 #intrain<- createDataPartition(df_xgb$churn,p=0.75,list=FALSE)
@@ -760,7 +761,7 @@ rmse_xgb <- rmse(ts_label, xgbpred) # 0.2953
 
 It is known for its good performance as compared to all other machine learning algorithms and has been a winner in many Data Science competitions. I wanted to run and try a bigger complex model to see if they perform any better or is simpler the better? I set the parameters for 10 k folds and 500 rounds and used cross validation to check on which round we would get the lowest test mean error. The model stopped on round 47 and and achieved an accuracy of 90.32%. I used 47 rounds in our main XGBoost training model and predicted our test set. The accuracy on our test set was approximately 90.73\$ with confidence intervals of 89 and 91%. The confusion matrix for the XGboost model is below:
 
-.![](C:/Users/abc/AppData/Local/RStudio/tmp/paste-DE476C08.png)
+.![](C:/Users/abc/AppData/Local/RStudio/tmp/paste-DE476C08.png){width="188" height="70"}
 
 We can see that the model correctly predicted that a majority of the customers wont churn and in reality they didnt. This shows that our model has a very high sensitivity of 99% based on our test set.
 
@@ -781,38 +782,41 @@ PowerCo appraoched me to help them predict which customers are most likely to le
 
 \newpage
 
-## **APPENDIX A**
+### **APPENDIX A**
 
 **Table 1 - Missing Values**
 
 ```{r missing_values, echo=FALSE, message=FALSE, warning=FALSE}
-kable(na_count, caption = "Missing Values in each Variable")
+library(knitr)
+kable(na_count)
 ```
 
 \newpage
 
-**Table 2 - Variance Inflation Factor (VIF)**
+**Table 2 - Variance Inflation Factor (VIF)** \\
 
-```{r vif,echo=FALSE, warning = FALSE, message = FALSE}
-kable(vif, caption = "Variance Inflation Factor (VIF)")
+```{r vif,echo=FALSE, warning = FALSE, message = FALSE, fig.align="center"}
+library(knitr)
+kable(vif)
 ```
 
 \newpage
 
 **Table 3 - Linear Probability Model Coefficients**
 
-```{r,echo=FALSE, warning = FALSE, message = FALSE}
-lp_table
+![](images/lpm.PNG)
 
-```
+\newpage
 
 **Table 4 - Top and Bottom 1% companies**
 
-```{r}
+```{r, echo = FALSE,fig.align="left"}
 kable(t1)
 kable(b1)
 
 ```
+
+\newpage
 
 **TABLE 5 - Logistic Regression Model Summaries**
 
@@ -820,11 +824,9 @@ kable(b1)
 
 ![](C:/Users/abc/AppData/Local/RStudio/tmp/paste-93152B5F.png)
 
-![]()
+\newpage
 
 ## **APPENDIX B**
-
-\newpage
 
 **Figure: 1 - Data Overview**
 
@@ -896,9 +898,11 @@ annotate_figure(other_eda,
                 left = text_grob("No of Companies", color = "black", rot = 90, face = "bold",size = 11))
 ```
 
+\newpage
+
 **Figure: 8 - Loess/Scatterplot of Variables**
 
-```{r, echo = FALSE, fig.align="center", message=FALSE, warning=FALSE, echo=FALSE,fig.height= 4}
+```{r, fig.align="center", fig.height=3, message=FALSE, warning=FALSE, echo=FALSE}
 ggpubr::ggarrange(cons_12m_sc,ln_cons_12m_sc, nrow = 1, ncol = 2)
 ggpubr::ggarrange(cons_last_month_sc,ln_cons_last_month_sc, nrow = 1, ncol = 2)
 ggpubr::ggarrange(imp_cons_sc,ln_imp_cons_sc, nrow = 1, ncol = 2)
@@ -913,24 +917,28 @@ ggpubr::ggarrange(forecast_cons_12m_sc,ln_forecast_cons_12m_sc, nrow = 1, ncol =
 
 **Figure: 9 - Transformed Variables Exploration**
 
-```{r, echo = FALSE, warning = FALSE, message = FALSE, fig.align="center",fig.height= 4}
+```{r echo=FALSE, fig.align="center", fig.height=4, message=FALSE, warning=FALSE}
 annotate_figure(transformed_eda,
                 bottom = text_grob("Value", color = "black",
                                    hjust = 8.8, x = 1, size = 11, face = "bold"),
                 left = text_grob("No of Companies", color = "black", rot = 90, face = "bold",size = 11))
 ```
 
+\newpage
+
 **Figure 10 - Correlation Matrix**
 
 ```{r correlation_matrix_chart,echo = FALSE, warning = FALSE, message = FALSE, fig.height=11,fig.width=11, fig.align="center"}
-cor_matrix + rotate_x_text(angle = 90) + font("xlab", size = 1, color = "black")+
- font("ylab", size = 1, color = "black")
+library(ggpubr)
+cor_matrix + rotate_x_text(angle = 90)
 
 ```
 
+\newpage
+
 **Figure 11 - Probability Distribution**
 
-```{r,echo = FALSE, warning = FALSE, message = FALSE}
+```{r, echo = FALSE,message=FALSE, warning=FALSE}
 lpm_pred_prob
 
 ```
@@ -938,13 +946,13 @@ lpm_pred_prob
 **Figure 12 - ROC Plot**
 
 ```{r, ROC,echo = FALSE, warning = FALSE, message = FALSE}
-roc_plot
+plot(auc_roc, col = "blue")
 
 ```
 
 **Figure 13 - ROC Plot XGBoost**
 
 ```{r, ROC_XG,echo = FALSE, warning = FALSE, message = FALSE}
-roc_xgb
+plot(roc_test) 
 
 ```
