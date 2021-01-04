@@ -9,7 +9,9 @@ header-includes:
   - \setlength{\droptitle}{-5em}
 ---
 
-Define what is your (broad) research question! What you want to learn from the data or what you want to use it? (a) What is the main aim: prediction or causality?
+## Background
+
+PowerCo is a major gas and electricity utility that supplies to corporate, SME (Small & Medium Enterprise), and residential customers. The power-liberalization of the energy market in Europe has led to significant customer churn, especially in the SME segment. They have approached me in my capacity as a Data Science Consultant to find out which customers are most likely to churn and what drivers lead to their churn. I met with PowerCo and discussed the various ways we could go about resolving the problems. One of the hypotheses under consideration is that churn is driven by the customers' price sensitivities and that it is possible to predict customers likely to churn using a predictive model. I have received the raw data from the management and have begun working.
 
 ```{r load_libraries, include= FALSE}
 ##########################################
@@ -33,13 +35,12 @@ library(Metrics)       # To calculate AUC
 library(ggpubr)
 library(knitr)
 library(pROC)
-library(skimr)
 library(DataExplorer)
-library(dplyr)
 library(stargazer)
 library(mfx)
 library(modelsummary)
 library(ROCR)
+library(dplyr)
 ```
 
 ```{r data_import, include= FALSE}
@@ -56,7 +57,7 @@ urlChurnOutput <- 'https://raw.githubusercontent.com/fasihatif/Data-Analysis-1-2
 DfChurnOutput <- read_csv(urlChurnOutput)
 ```
 
-## **Understanding our Data**
+## **Understanding Data**
 
 ```{r merge_data, include= FALSE}
 
@@ -73,7 +74,6 @@ count(unique(DfChurnOutput)) #16096
 
 # Merge dataframes by id column since equal and has unique ids. We create a df named df_draft where we do all the working for cleaning and feature engineering
 df_draft <- merge(DfCustomerHistory,DfChurnOutput, by = 'id')
-write.csv(df_draft, "df_draft.csv")
 
 rm(DfChurnOutput,DfCustomerHistory)
 
@@ -82,7 +82,7 @@ summary(df_draft) # add some analysis regarding consumption and forecasting
 
 ```
 
-```{r data_cleaning, include= FALSE}
+```{r data_cleaning, include= FALSE, warning = FALSE, message = FALSE}
 ##########################################
 #             Cleaning the Data          #
 ##########################################
@@ -100,7 +100,7 @@ col_30 <- na_count %>% filter(na_percent < 30)
 col_30 <- rownames(col_30)
 
 # Remove columns with NA values greater than 30%
-df_draft <- df_draft %>% select(all_of(col_30))
+df_draft <- df_draft %>% dplyr::select(all_of(col_30))
 
 # Fill in missing dates with median
 ## Replace NA values in 'date_end' column with median date
@@ -143,8 +143,8 @@ df_draft <- df_draft %>% mutate('months_modif' =  as.integer((difftime(ref_date,
 df_draft <- df_draft %>% mutate('months_renewal' =  as.integer((difftime(ref_date,date_renewal, unit = "days"))/(365.25/12)))
 
 # Remove columns with NA values greater than 30%
-df <- df_draft %>% select(all_of(col_30), contract_duration,has_gas,months_active,months_end,months_modif,months_renewal)
-df <- df %>% select(-c(date_activ,date_end,date_modif_prod,date_renewal, date_renewal,forecast_cons_year, origin_up))
+df <- df_draft %>% dplyr::select(all_of(col_30), contract_duration,has_gas,months_active,months_end,months_modif,months_renewal)
+df <- df %>% dplyr::select(-c(date_activ,date_end,date_modif_prod,date_renewal, date_renewal,forecast_cons_year, origin_up))
 
 # Dummy Variable creation for channel_sales and has_gas
 ## How many dummy columns to make?
@@ -169,17 +169,16 @@ df <-
 ## Remove one of the dummy columns to cater for multicollinearity. We will remove 'channel_null' and 'has_gas_0'
 df <- subset(df,select = -c(channel_null,has_gas_0))
 
-data_skim <- skimr::skim(df)
 ```
 
-The raw data consisted of 33 columns and 16096 observations in each column. The data represents the several characteristics of the company that could play an important part in their churning and retention. The data contains variables such as dates, forecasted consumption and prices, net/gross margins and churn status. It is often said that 80% of the time is spent in data cleaning and processing while just 20% is spent on running the analytics on the clean data. This saying was applicable in our case as well. There were several data quality issues such as missing values, outliers, wrong negative values, multicollinearity, and skewed variables. Our dependent variable would be the binary churn variable while the rest of the variables would act as the independent variables.
+The raw data consisted of 33 columns and 16096 observations in each column. The data represents the several characteristics of the company that could play an important part in their churning and retention. The data contains variables such as historical usage, dates, forecasted consumption and prices, net/gross margins and churn status. It is often said that 80% of the time is spent in data cleaning and processing while just 20% is spent on running the analytics on the clean data. This saying was applicable in our case as well. There were several data quality issues such as missing values, outliers, incorrect negative values, multicollinearity, and skewed variables. Our dependent variable would be the binary churn variable while the rest of the variables would act as the independent variables. **Figure 1** presents an overview of the raw data.
 
 ## **Exploring Data Analysis**
 
 ```{r eda, include= FALSE, warning= FALSE, message = FALSE}
 # Churn Rate
 churn_rate_barchart <- df %>% 
-  select(churn) %>%
+  dplyr::select(churn) %>%
   group_by(churn) %>%
   summarise(percentage = n()) %>%
   mutate(Percent = round(100*percentage/sum(percentage),1)) %>%
@@ -224,7 +223,7 @@ months_modif_barchart <- months_length(df$months_modif,df$churn)
 
 color <- "cyan3"
 consumption_eda <- df %>%
-  select(cons_12m,cons_gas_12m,cons_last_month,imp_cons) %>%
+  dplyr::select(cons_12m,cons_gas_12m,cons_last_month,imp_cons) %>%
   keep(is.numeric) %>% 
   gather() %>% 
   ggplot(aes(value)) +
@@ -235,7 +234,7 @@ consumption_eda <- df %>%
 ##### FORECAST VARIABLES EXPLORATORY ANALYSIS #####
 
 forecast_eda <- df %>%
-  select(forecast_cons_12m,forecast_discount_energy,forecast_meter_rent_12m,forecast_price_energy_p1,forecast_price_energy_p2,forecast_price_pow_p1) %>%
+  dplyr::select(forecast_cons_12m,forecast_discount_energy,forecast_meter_rent_12m,forecast_price_energy_p1,forecast_price_energy_p2,forecast_price_pow_p1) %>%
   keep(is.numeric) %>% 
   gather() %>% 
   ggplot(aes(value)) +
@@ -245,7 +244,7 @@ forecast_eda <- df %>%
 ##### MARGIN VARIABLES EXPLORATORY ANALYSIS #####
 
 margin_eda <- df %>%
-  select(margin_gross_pow_ele,margin_net_pow_ele,net_margin) %>%
+  dplyr::select(margin_gross_pow_ele,margin_net_pow_ele,net_margin) %>%
   keep(is.numeric) %>% 
   gather() %>% 
   ggplot(aes(value)) +
@@ -255,7 +254,7 @@ margin_eda <- df %>%
 ##### OTHER VARIABLES EXPLORATORY ANALYSIS #####
 
 other_eda <- df %>%
-  select(nb_prod_act,num_years_antig,pow_max) %>%
+  dplyr::select(nb_prod_act,num_years_antig,pow_max) %>%
   keep(is.numeric) %>% 
   gather() %>% 
   ggplot(aes(value)) +
@@ -342,14 +341,10 @@ ln_forecast_meter_rent_12m_sc <- ggplot(df , aes(x = forecast_meter_rent_12m, y 
 
 ```{r further_data_cleaning, include = FALSE,warning = FALSE, message = FALSE}
 
-# Checkpoint for further data cleaning
-df_ftc <- df
-# df <- df_ftc
-
 # Subsetting important variables for outlier treatment
 # df <- subset(df,select = -c(id,cons_12m,cons_gas_12m,cons_last_month,imp_cons,forecast_cons_12m,forecast_meter_rent_12m))
-df_other <- df %>% select(-c(forecast_price_energy_p1,forecast_price_energy_p2,forecast_price_pow_p1,margin_gross_pow_ele,margin_net_pow_ele,net_margin,pow_max,cons_12m,cons_gas_12m,cons_last_month,imp_cons,forecast_cons_12m,forecast_meter_rent_12m))
-df <- df %>% select(c(forecast_price_energy_p1,forecast_price_energy_p2,forecast_price_pow_p1,margin_gross_pow_ele,margin_net_pow_ele,net_margin,pow_max,cons_12m,cons_gas_12m,cons_last_month,imp_cons,forecast_cons_12m,forecast_meter_rent_12m))
+df_other <- df %>% dplyr::select(-c(forecast_price_energy_p1,forecast_price_energy_p2,forecast_price_pow_p1,margin_gross_pow_ele,margin_net_pow_ele,net_margin,pow_max,cons_12m,cons_gas_12m,cons_last_month,imp_cons,forecast_cons_12m,forecast_meter_rent_12m))
+df <- df %>% dplyr::select(c(forecast_price_energy_p1,forecast_price_energy_p2,forecast_price_pow_p1,margin_gross_pow_ele,margin_net_pow_ele,net_margin,pow_max,cons_12m,cons_gas_12m,cons_last_month,imp_cons,forecast_cons_12m,forecast_meter_rent_12m))
 
 # Detecting outliers and replacing them with mean
 remove_outliers <- function(column_name){
@@ -368,8 +363,8 @@ df <- cbind(df_other,df)
 # Continue on with df dataframe and treat it for missing values
 # Remove all NA values and replace with mean
 
-df_id <- df %>% select(id)
-df <- df %>% select(-id)
+df_id <- df %>% dplyr::select(id)
+df <- df %>% dplyr::select(-id)
 
 rm(df_other)
 ```
@@ -414,7 +409,7 @@ df <- data.frame(sapply(df, function(x) replace(x, is.na(x), mean(x, na.rm = TRU
 
 # Now check for the distribution of the transformed variables
 transformed_eda <- df %>%
-  select(ln_cons_12m,ln_cons_gas_12m,ln_cons_last_month,ln_imp_cons,ln_forecast_cons_12m,ln_forecast_meter_rent_12m) %>%
+  dplyr::select(ln_cons_12m,ln_cons_gas_12m,ln_cons_last_month,ln_imp_cons,ln_forecast_cons_12m,ln_forecast_meter_rent_12m) %>%
   keep(is.numeric) %>% 
   gather() %>% 
   ggplot(aes(value)) +
@@ -422,7 +417,7 @@ transformed_eda <- df %>%
   geom_histogram(fill = color) + theme_bw() +labs(y = NULL, x = NULL)
 
 # Remove original columns which have been transformed
-df <- df %>% select(-c(cons_12m,cons_gas_12m,cons_last_month,imp_cons,forecast_cons_12m,forecast_meter_rent_12m))
+df <- df %>% dplyr::select(-c(cons_12m,cons_gas_12m,cons_last_month,imp_cons,forecast_cons_12m,forecast_meter_rent_12m))
 
 
 ```
@@ -445,20 +440,18 @@ df <- subset(df, select = -c(contract_duration,num_years_antig, margin_gross_pow
 
 ```
 
-The missing data (**Table 1**) was very small for majority of the variables, so we were able to easily replace the missing values with mean and median approximations.Any column that had more than 30% missing observations were removed. We then conducted Feature Engineering. We converted dates into durations to make them more useful. After getting done with our initial data cleaning and feature Engineering, we checked the distributions of the variables through histograms (**Figure 1-7**).
+The missing data (**Table 1**) was very small for majority of the variables, so i was able to easily replace the missing values with mean and median approximations. Any column that had more than 30% missing observations were removed. I then moved on to conducted Feature Engineering to draw more useful variables from our existing ones. I converted dates into monthly durations to make them more useful (**Figure 2**). After getting done with our initial data cleaning and feature Engineering, i checked the distributions of the variables through histograms (**Figure 1-9**).
 
-Our exploratory data analysis shows that around 10% of the of total customers have churned (**Figure 1**). All Consumption related variables (cons\_12m ,cons\_last\_month,imp\_cons,cons\_gas\_12m ) and 2 of the forecast variables (forecast\_cons\_12m,forecast\_meter\_rent\_12m) are extremely right skewed (**Figure 2,3**). The values on the higher end and lower ends of the distribution are potentially outliers. Next we checked a non-parametric estimator loess smoother to have a general idea about the functional form between a variable and churn. We will specifically focus on those variables who had skewed distributions (Figure ). As expected, the functional forms are very non linear and hence we took log of the 6 variables( 4 consumption and 2 forecast variables) to give the loess line a more linear shape (**Figure 7**). The transformation of the log variables can be seen in (**Figure 8**).
-
-We used boxplots to tell us more about the outliers and what their values are. We then removed these values and replaced them with the mean of the respective columns values excluding the outliers.
+Our exploratory data analysis shows that around 10% of the of total customers have churned (**Figure 3**). All Consumption related variables (cons\_12m ,cons\_last\_month,imp\_cons,cons\_gas\_12m ) and 2 of the forecast variables (forecast\_cons\_12m,forecast\_meter\_rent\_12m) are extremely right skewed (**Figure 4,5**). The values on the higher end and lower ends of the distribution are potential outliers. Next we checked a non-parametric estimator loess smoother to have a general idea about the functional form between a variable and churn. We will specifically focus on those variables who had skewed distributions (Figure ). As expected, the functional forms are very non linear and hence we took log of the 6 variables (4 consumption and 2 forecast variables) to give the loess line a more linear shape (**Figure 6,7**). Before i took the logs, i converted the negative values to NA values in the consumption related variables. Firstly it will allows us to take logs and secondly these negative values seem to be corrupted data. The energy consumption variables negative state means that the customers were now returning/creating the energy instead of buying from PowerCo. The missing values were then umputed with mean values. The transformation of the log variables can be seen in (**Figure 9**). I used boxplots to tell us more about the outliers and what their values are. We then removed these values and replaced them with the mean of the respective columns values excluding the outliers.
 
 **Multicollinearity and Dummy Variables**
 
-When you have two independent variables that are very highly correlated, you definitely should remove one of them because you run into the multicollinearity conundrum and your regression model's regression coefficients related to the two highly correlated variables will be unreliable. We checked for multicollinearity between the explanatory variables. We drew a correlated matrix (**Figure 9**) to observe which pair of variables were highly correlated. Once we found the pairs, we calculated the Variance Inflation Factor (VIF) (**Table 2**) to confirm the correlation and remove one variable from the pairs.This was done to reduce multicollinearity. For this, we first created the correlation matrix. For pairs that have very high correlations, we will use Variance Inflation Factor to determine which variable to remove. Categorical columns ('channel\_sales' and 'has\_gas') were converted into dummy columns and the reference columns were removed.
+When you have two independent variables that are very highly correlated, you definitely should remove one of them because you run into the multicollinearity conundrum and your regression model's regression coefficients related to the two highly correlated variables will be unreliable. I checked for multicollinearity between the explanatory variables. I drew a correlated matrix (**Figure 10**) to observe which pair of variables were highly correlated. Once I noticed some highly correlated pairs, we calculated the Variance Inflation Factor (VIF) (**Table 2**) to confirm the correlation and remove one of the variable from the correlated pairs.This was done to reduce multicollinearity. Categorical columns ('channel\_sales' and 'has\_gas') were converted into dummy columns and the reference columns were removed.
 
-**Machine Learning and Predictions**
+**Machine Learning, Probabilities, and Predictions**
 
-```{r split_data, incLude = FALSE, warning= FALSE, message = FALSE}
-df$churn <- as.factor(df$churn)
+```{r split_data, include = FALSE, warning= FALSE, message = FALSE}
+df <- df %>% mutate(churn = as.factor(churn))
 
 ##### SPLIT DATA INTO TEST/TRAIN DATASET #####
 set.seed(1111)
@@ -468,13 +461,92 @@ test <- df[-intrain,]
 
 ```
 
-```{r lpm, incLude = FALSE, warning= FALSE, message = FALSE}
+```{r sum_stat, include = FALSE}
+sum_stat <- function( df , var_names , stats , num_obs = TRUE ){
+  k <- length( var_names )
+  built_in_stat <- c('mean','median','mode','min','max','1st_qu.','3rd_qu',
+                     'sd','var','range','iqr')
+  do_stat <- intersect( stats , built_in_stat )
+  if ( is_empty(do_stat) ){
+    stop('Error, no such statistics is implemented! Choose from: mean,median,min,max,1st_qu.,3rd_qu')
+  }
+  # By default add the number of missing observations and the number of used observations
+  m <- length( do_stat )
+  if ( num_obs ){
+    do_stat <- c( do_stat , "# missing", "# used obs")
+  }
+  # Create tibble for output
+  sum_stat <- as_tibble( matrix( 0 , nrow = m , ncol = k ) , name_repair = "unique" )
+  for ( j in 1 : k ) {
+    # Get the data for the j'th variable
+    var_j <- df[ var_names[ j ] ]
+    if ( num_obs ){
+      # Count the missing values and add to statistics
+      sum_stat[ m + 1 , j ] <- as.integer( sum( is.na( var_j ) ) )
+      # Count observations used
+      sum_stat[ m + 2 , j ] <- as.integer( sum( !is.na( var_j ) ) )
+    }
+    # Remove missing values
+    var_j <- var_j[ !is.na( var_j ) ]
+    # Name the sum_stat's column
+    colnames( sum_stat )[ j ] <- var_names[ j ]
+    for ( i in 1 : m ) {
+      # Central tendency
+      if (do_stat[ i ] == "mean"){
+        sum_stat[[i,j]] <- mean( var_j )
+      } else if (do_stat[ i ] == "median"){
+        sum_stat[i,j] <- median( var_j )
+      } else if (do_stat[ i ] == "mode"){
+        sum_stat[i,j] <- mode( var_j )
+      } 
+      # Support
+      else if (do_stat[ i ] == "min"){
+        sum_stat[i,j] <- min( var_j )
+      } else if (do_stat[ i ] == "max"){
+        sum_stat[i,j] <- max( var_j )
+      } 
+      # Quartiles
+      else if (do_stat[ i ] == "1st_qu."){
+        sum_stat[i,j] <- quantile( var_j , probs = 0.25 )
+      } else if (do_stat[ i ] == "3rd_qu"){
+        sum_stat[i,j] <- quantile( var_j , probs = 0.75)
+      } 
+      # Dispersion
+      else if (do_stat[ i ] == "sd"){
+        sum_stat[i,j] <- sd( var_j )
+      } else if (do_stat[ i ] == "var"){
+        sum_stat[i,j] <- var( var_j )
+      } else if (do_stat[ i ] == "range"){
+        sum_stat[i,j] <- max( var_j ) - min( var_j )
+      } else if (do_stat[ i ] == "iqr"){
+        sum_stat[i,j] <- quantile( var_j , probs = 0.75) - quantile( var_j , probs = 0.25)
+      } 
+    }
+  }
+  # Finally add a column which contains the requested statistics and relocate to first position
+  sum_stat <- sum_stat %>% 
+    mutate( statistics = do_stat ) %>% 
+    relocate( statistics )
+  
+  return( sum_stat )
+}
+```
+
+I devised the following equation that will be used in the models:
+
+![](C:/Users/abc/AppData/Local/RStudio/tmp/paste-E4AFA280.png)
+
+## **Linear probability Model**
+
+Now that our data is ready for analysis we will start off with same basic probability models such as the Linear Probability Model.We split the data into train and test groups in a 75/25 ratio. The produced coefficients for this model can been see in (**Table 3**). We used the model to predict on the test set. The probability distribution is centered around 1.1 (**Figure 11**). Probability values are between 0 and 1 but in our model, half of our probabilities are greater than 1. This is a drawback of the model. Nevertheless, we will try to study the characteristics of the top 1% customers who have the highest and lowest probability of leaving. The results are shown in (**Table 4**). The AIC for the model was 4893.13 and BIC was 5092.895.
+
+```{r lpm, include = FALSE, warning= FALSE, message = FALSE}
 
 ##########################################
 #         Linear Probability Model       #
 ##########################################
 
-train_lpm <- test
+train_lpm <- train
 test_lpm <- test
 
 train_lpm$churn <- as.numeric(train_lpm$churn)
@@ -484,45 +556,44 @@ test_lpm$churn <- as.numeric(test_lpm$churn)
 
 lp_model <-lm(churn ~ ., data = train_lpm)
 summary(lp_model)
+print(lp_model)
 
 # Save the model output
  lp_table <- huxtable::huxreg(lp_model)
 
 # Check predicted probabilities: is there any interesting values?
 # predicted probabilities
-test$pred_lpm <- predict(lp_model,test_lpm )
+test_lpm$pred_lpm <- predict(lp_model,test_lpm )
 # Make a descriptive summary of the predictions!
-summary(pred_lpm )
+summary(test_lpm$pred_lpm)
 
 # Show the predicted probabilities' distribution (ggplot)
-lpm_pred_prob <- ggplot( test , aes( x = pred_lpm ) ) +
+lpm_pred_prob <- ggplot( test_lpm , aes( x = pred_lpm ) ) +
   geom_histogram(fill = 'cyan3', color = 'black') + theme_bw() + labs(title = "Predicted Probabilities -LPM Model")
 
 test_lpm <- test_lpm %>% 
   mutate( q100_pred_lpm = ntile(pred_lpm, 100) )
 
-# Make a summary statistics, using sum_stat for the bottom (q100_pred_lpm==1) 
-#   and top 1% (q100_pred_lpm==100), using stats = c('mean','median','sd')
-#   and variables c('smoking','ever_smoked','female','age','eduyears','income10','bmi','exerc')
-#   use the num_obs = F input for sum_stat
-
 # Top 1%
-t1 <- source('https://raw.githubusercontent.com/CEU-Economics-and-Business/ECBS-5208-Coding-1-Business-Analytics/master/Class_10/codes/sum_stat.R')( subset( share , q100_pred_lpm==100 ) , 
-                c('forecast_discount_energy','nb_prod_act','months_active   ','months_end','months_modif','months_renewal','channel_epum','channel_ewpa','channel_foos','channel_lmke','channel_sddi','channel_usil','has_gas_1','forecast_price_energy_p1','forecast_price_energy_p2','forecast_price_pow_p1','margin_net_pow_ele','net_margin','pow_max','ln_cons_12m','ln_cons_last_month','ln_imp_cons','ln_forecast_cons_12m','ln_forecast_meter_rent_12m' ),
+t1 <- sum_stat( subset(test_lpm , q100_pred_lpm==100 ) , 
+                c('forecast_discount_energy','nb_prod_act','months_active', 'months_end', 'months_modif', 'months_renewal', 'channel_epum', 'channel_ewpa','channel_foos' , 'channel_lmke', 'channel_sddi', 'channel_usil','has_gas_1','forecast_price_energy_p1','forecast_price_energy_p2','forecast_price_pow_p1','margin_net_pow_ele','net_margin','pow_max','ln_cons_12m','ln_cons_last_month','ln_imp_cons','ln_forecast_cons_12m','ln_forecast_meter_rent_12m' ),
                 c('mean','median','sd'),
                 num_obs = F )
 t1
 
 # Bottom 1%
-b1 <- source('https://raw.githubusercontent.com/CEU-Economics-and-Business/ECBS-5208-Coding-1-Business-Analytics/master/Class_10/codes/sum_stat.R')( subset( share , q100_pred_lpm==1 ) , 
-                c('forecast_discount_energy','nb_prod_act','months_active   ','months_end','months_modif','months_renewal','channel_epum','channel_ewpa','channel_foos','channel_lmke','channel_sddi','channel_usil','has_gas_1','forecast_price_energy_p1','forecast_price_energy_p2','forecast_price_pow_p1','margin_net_pow_ele','net_margin','pow_max','ln_cons_12m','ln_cons_last_month','ln_imp_cons','ln_forecast_cons_12m','ln_forecast_meter_rent_12m' ),
+b1 <- sum_stat( subset( test_lpm , q100_pred_lpm==1 ) , 
+                c('forecast_discount_energy','nb_prod_act','months_active', 'months_end', 'months_modif', 'months_renewal', 'channel_epum', 'channel_ewpa','channel_foos' , 'channel_lmke', 'channel_sddi', 'channel_usil','has_gas_1','forecast_price_energy_p1','forecast_price_energy_p2','forecast_price_pow_p1','margin_net_pow_ele','net_margin','pow_max','ln_cons_12m','ln_cons_last_month','ln_imp_cons','ln_forecast_cons_12m','ln_forecast_meter_rent_12m' ),
                 c('mean','median','sd'),
                 num_obs = F )
 b1
 
-
+AIC(lp_model)
+BIC(lp_model)
 
 ```
+
+## **Logistic Regression**
 
 ```{r glm, include = FALSE, warning= FALSE, message = FALSE}
 
@@ -541,7 +612,7 @@ logit_model2 <- glm(as.factor(churn)~. -channel_sddi -channel_epum -net_margin -
 
 # Probit Model 1
 probit_model <- glm(as.factor(churn)~., data = glm_train, family = binomial("probit"))
-
+BIC(logit_model1)
 
 # Model  Prediction with Logit
 pred_type_test_l <- predict(logit_model2, newdata = glm_test, type = "response")
@@ -555,12 +626,13 @@ logit_marg <- logitmfx(as.factor(churn)~., data=glm_train, atmean=FALSE, robust 
 print(logit_marg)
 
 #Model Prediction with Probit
-pred_type_logit  <- predict(glm_model1, newdata = glm_test, type = "response")
+pred_type_logit  <- predict(logit_model2, newdata = glm_test, type = "response")
 glm_test <- cbind(pred_type_logit,test)
 
 # Calculate probit marginal differences
 probit_marg <- probitmfx(as.factor(churn)~., data=glm_train, atmean=FALSE, robust = T)
 print( probit_marg )
+
 
 #Save models
 w_dir <- 'C:/Users/abc/OneDrive/Business_Analytics/Data-Analysis-1-2-3/Data_Analysis_2/DA2_final_project/out/'
@@ -574,7 +646,6 @@ msummary( pmodels ,
           coef_omit = 'as.factor(churn)*',
           output = paste0(w_dir,"prob_models_coeff.html")
 )
-?msummary
 
 
 # Confusion Matrix
@@ -587,36 +658,32 @@ predictFull <- prediction(pred_type_test_l,as.factor(glm_test$churn))
 
 # Plot AUC
 auc_roc <- performance(predictFull, measure = 'tpr',x.measure = 'fpr')
-plot(auc_roc, col = "blue")
+roc_plot <- plot(auc_roc, col = "blue")
 
 auc_score_glm <- auc(glm_test$churn, pred_type_test_l) #0.6221063
 rmse_score_glm <- rmse(glm_test$churn, pred_type_test_l) # 0.2994171
 ```
 
-
-
-We used 3 Machine Learning models to predict whether a customer would churn or not and their probabilities.
-
-**Logistic Regression**:
-
 Logistic Regression belongs to the family of generalized linear models. It is a binary classification algorithm used when the response variable is dichotomous (1 or 0). Inherently, it returns the set of probabilities of target class. But, we can also obtain response labels using a probability threshold value.
 
-For our analysis, we first split the data 75/25 into train and test models respectively. We ran the Logistic Regression via the ML Caret Package. We used K fold Cross Validation on our training set in order to flag problems like overfitting or selection bias and to give an insight on how the model will generalize to an independent dataset. For further robustness check, we ran 3 variants of the Logistic Regression model with varying \$\$B coefficients.
+Logistic Regression with Logit/Probit models will suit our research better as they limit the probability between 0 and 1. We first ran a logit model with all variables and looked at the results. The most insignificant variables were removed and a second logit model was performed. The second logit model performed slightly better with lesser coefficients. We calculated the marginal difference for logit model. Then we ran Probit model and Probit marginal difference models to see if it performed better than logit. The coefficients of the 4 models can be compared in (**Table 5**).
 
-The equation for our first model is:
+The AIC for logit model is 7593.75 and BIC was 7786.119. The AIC for Probit model was 7595.39 and BIC was 7787.75. The logit model performed better overall.
 
-$$
-churn = \beta_0+ \beta_1cons\_12m_i + \beta_2log(cons\_last\_month)_i +\beta_3log(imp\_cons)_i+ \beta_4forecast\_price\_energy\_p1_i + \\ \beta_5forecast\_price\_energy\_p2_i + \beta_6forecast\_price\_pow\_p1_i + \beta_7forecast\_discount\_energy_i + \beta_8log(forecast\_meter\_rent\_12m_i) +\\ \beta_9months\_active_1 + \beta_{10}months\_modif_i + \beta_{11}months\_renewal_i + \beta_{12}channel\_usil_i + \beta_{13}channel\_lmke_i +\beta_{14}channel\_ewpa_i + \\ \beta_{15}channel\_foos_i + \beta_{16}channel\_sddi_i + \beta_{17}channel\_epum_i + \beta_{18}\_months\_end+i + \beta_{19}b\_prod\_act_i + \beta_{20}\_pow\_max_i \\ + \beta_{21}\_has\_gas\_1_i + \beta_{22}\_net\_margin_i +\beta_{23}margin\_net\_pow\_ele_i + \beta_{24}log(forecast\_cons\_12m_i)
-$$
+The confusion matrix is shown below:
 
-We ran the logistic regression with all the explanatory variables and received the results as shown in
+![](C:/Users/abc/AppData/Local/RStudio/tmp/paste-1CD9D45B.png)
 
-```{r xgboost, include = FALSE, message = FALSE, warning = FALSE}
+It shows that our model predicted correctly with an accuracy of 90.1%. We also drew an ROC curve (**Figure 12**) and computed the AUC validated which turned out to be 0.5. The model can be greatly improved if more work is done on this.
+
+## XGBoost Model
+
+```{r xgboost, echo = FALSE, message = FALSE, warning = FALSE}
 
 set.seed(2018)
-intrain<- createDataPartition(df_xgb$churn,p=0.75,list=FALSE)
-ml_train <- df[intrain,]
-ml_test <- df[-intrain,]
+#intrain<- createDataPartition(df_xgb$churn,p=0.75,list=FALSE)
+ml_train <- train
+ml_test <-  test
 
 labels <- ml_train$churn
 ts_label <- ml_test$churn
@@ -626,10 +693,10 @@ ts_label <- as.numeric(as.character(ts_label))
 
 #XGBoost takes matrix for data hence we convert dataframe to matrix
 # df_xgb_backup<- df_xgb
-xgb_train <- ml_train %>% select(-churn)
+xgb_train <- ml_train %>% dplyr::select(-churn)
 xgb_train <- xgb.DMatrix(data = as.matrix(xgb_train),label = labels)
 
-xgb_test <- ml_test %>% select(-churn)
+xgb_test <- ml_test %>% dplyr::select(-churn)
 xgb_test <- xgb.DMatrix(data = as.matrix(xgb_test),label = ts_label)
 
 #default parameters
@@ -678,7 +745,7 @@ cm_xgb <- confusionMatrix (as.factor(xgbpred), as.factor(ts_label))
 #Accuracy - 86.54%` 
 
 #view variable importance plot
-mat <- xgb.importance (feature_names = colnames(df_xgb),model = xgb_model)
+mat <- xgb.importance (feature_names = colnames(ml_train),model = xgb_model)
 
 # The ggplot-backend method also performs 1-D clustering of the importance values, with bar colors 
 # corresponding to different clusters that have somewhat similar importance values.
@@ -691,18 +758,35 @@ auc_xgb <- auc(ts_label, xgbpred) #0.5684948
 rmse_xgb <- rmse(ts_label, xgbpred) # 0.2953
 ```
 
+It is known for its good performance as compared to all other machine learning algorithms and has been a winner in many Data Science competitions. I wanted to run and try a bigger complex model to see if they perform any better or is simpler the better? I set the parameters for 10 k folds and 500 rounds and used cross validation to check on which round we would get the lowest test mean error. The model stopped on round 47 and and achieved an accuracy of 90.32%. I used 47 rounds in our main XGBoost training model and predicted our test set. The accuracy on our test set was approximately 90.73\$ with confidence intervals of 89 and 91%. The confusion matrix for the XGboost model is below:
+
+.![](C:/Users/abc/AppData/Local/RStudio/tmp/paste-DE476C08.png)
+
+We can see that the model correctly predicted that a majority of the customers wont churn and in reality they didnt. This shows that our model has a very high sensitivity of 99% based on our test set.
+
+Its not exactly easy to interpret information from XGBoost model without processing it further but we can use the data to show which are the most influential variables:
+
+```{r, echo = FALSE, warning= FALSE, message = FALSE, fig.align="center"}
+xgb_feature_plot
+
+```
+
+The chart shows that forecast\_price\_pow\_p1 , ln\_forecast\_cons\_12m, pow\_max are some of the most important variables that the management should look at when dealing with customers.
+
+The ROC (**Figure 13**) of the XGboost model fares better than the logit model as the AUC comes out to be 0.5684.
+
+## **Conclusion**
+
+PowerCo appraoched me to help them predict which customers are most likely to leave. I did some exploratory data analysis and transformed the variables. I then conducted some machine learning classification and analysed probabilities. Both Logit and XGboost models performed very well and had accuracy above 90%. However, the AUC , AIC, and BIC scores were beter in XGBoost model. I would recommend using both logistic and XGboost models. Logistic has comparatively easier interpretations and easier to use.
+
 \newpage
 
 ## **APPENDIX A**
 
-\newpage
-
-## **APPENDIX B**
-
 **Table 1 - Missing Values**
 
 ```{r missing_values, echo=FALSE, message=FALSE, warning=FALSE}
-knitr::kable(na_count, caption = "Missing Values in each Variable")
+kable(na_count, caption = "Missing Values in each Variable")
 ```
 
 \newpage
@@ -710,31 +794,45 @@ knitr::kable(na_count, caption = "Missing Values in each Variable")
 **Table 2 - Variance Inflation Factor (VIF)**
 
 ```{r vif,echo=FALSE, warning = FALSE, message = FALSE}
-```
-
-```{r vif,echo=FALSE, warning = FALSE, message = FALSE}
-kable(vif, caption = "Variance Inflation Factor (VIF) ")
+kable(vif, caption = "Variance Inflation Factor (VIF)")
 ```
 
 \newpage
 
-## **APPENDIX C**
+**Table 3 - Linear Probability Model Coefficients**
+
+```{r,echo=FALSE, warning = FALSE, message = FALSE}
+lp_table
+
+```
+
+**Table 4 - Top and Bottom 1% companies**
+
+```{r}
+kable(t1)
+kable(b1)
+
+```
+
+**TABLE 5 - Logistic Regression Model Summaries**
+
+(From left to right: logit\_model\_2, logit\_marg, probit\_model\_1,probit\_marg)
+
+![](C:/Users/abc/AppData/Local/RStudio/tmp/paste-93152B5F.png)
+
+![]()
+
+## **APPENDIX B**
 
 \newpage
 
-```{r, plot_intro, echo = FALSE, warning= FALSE,message= FALSE, fig.width=8,fig.height=4, fig.align="center"}
-plot_intro_bar + labs(title = "Data Overview")
-```
+**Figure: 1 - Data Overview**
 
-**Figure: 1 - Churn Rate**
+![](C:/Users/abc/AppData/Local/RStudio/tmp/paste-98F2FDB6.png)
 
-```{r churn_rate, echo = FALSE, warning= FALSE,message= FALSE, fig.width=8,fig.height=4, fig.align="center"}
-print(churn_rate_barchart)
-```
+**Figure: 2 - Monthly Duration charts**
 
-**Figure: 2 - Month Duration charts**
-
-```{r months_active_end, echo=FALSE, fig.height=4, fig.width=8, message=FALSE, warning=FALSE, fig.align="center"}
+```{r months_active_end, echo=FALSE, fig.height=5, fig.width=8, message=FALSE, warning=FALSE, fig.align="center"}
 ggarrange1 <- ggarrange(months_active_barchart,months_end_barchart,months_renewal_barchart,months_modif_barchart,
           nrow = 2, ncol = 2,
           common.legend = TRUE,
@@ -749,11 +847,17 @@ annotate_figure(ggarrange1,
                 left = text_grob("No of Companies", color = "black", rot = 90, face = "bold",size = 11))
 ```
 
+**Figure: 3 - Churn Rate**
+
+```{r churn_rate, echo = FALSE, warning= FALSE,message= FALSE, fig.width=8,fig.height=5, fig.align="center"}
+print(churn_rate_barchart)
+```
+
 \newpage
 
-**Figure: 3 - Consumption Variables Exploration**
+**Figure: 4 - Consumption Variables Exploration**
 
-```{r consumption_eda, echo = FALSE, warning = FALSE, message = FALSE, fig.align="center"}
+```{r consumption_eda, echo = FALSE, warning = FALSE, message = FALSE, fig.align="center",fig.height= 4}
 ##### CONSUMPTION VARIABLES EXPLORATORY ANALYSIS #####
 annotate_figure(consumption_eda,
                 bottom = text_grob("Consumption", color = "black",
@@ -763,9 +867,9 @@ annotate_figure(consumption_eda,
 
 ```
 
-**Figure: 4 - Forecast Variables Exploration**
+**Figure: 5 - Forecast Variables Exploration**
 
-```{r forecast_eda, echo=FALSE, message=FALSE, warning=FALSE, fig.align="center",fig.height= 5}
+```{r forecast_eda, echo=FALSE, message=FALSE, warning=FALSE, fig.align="center",fig.height= 4}
 annotate_figure(forecast_eda,
                 bottom = text_grob("Dollars ($)", color = "black",
                                    hjust = 5, x = 1, size = 11, face = "bold"),
@@ -774,27 +878,27 @@ annotate_figure(forecast_eda,
 
 \newpage
 
-**Figure: 5 - Margin Variables Exploration**
+**Figure: 6 - Margin Variables Exploration**
 
-```{r margin_eda, echo = FALSE, message=FALSE, warning=FALSE, fig.align="center"}
+```{r margin_eda, echo = FALSE, message=FALSE, warning=FALSE, fig.align="center",fig.height= 3}
 annotate_figure(margin_eda,
                 bottom = text_grob("Dollars ($)", color = "black",
                                    hjust = 4.75, x = 1, size = 11, face = "bold"),
                 left = text_grob("No of Companies", color = "black", rot = 90, face = "bold",size = 11))
 ```
 
-**Figure: 6 - Other Variables Exploration**
+**Figure: 7 - Other Variables Exploration**
 
-```{r other_eda, echo = FALSE, message=FALSE, warning=FALSE, fig.align="center"}
+```{r other_eda, echo = FALSE, message=FALSE, warning=FALSE, fig.align="center",fig.height= 3}
 annotate_figure(other_eda,
                 bottom = text_grob("Value", color = "black",
                                    hjust = 8.8, x = 1, size = 11, face = "bold"),
                 left = text_grob("No of Companies", color = "black", rot = 90, face = "bold",size = 11))
 ```
 
-**Figure: 7 - Loess/Scatterplot of Variables**
+**Figure: 8 - Loess/Scatterplot of Variables**
 
-```{r, echo = FALSE, fig.align="center", message=FALSE, warning=FALSE, echo=FALSE}
+```{r, echo = FALSE, fig.align="center", message=FALSE, warning=FALSE, echo=FALSE,fig.height= 4}
 ggpubr::ggarrange(cons_12m_sc,ln_cons_12m_sc, nrow = 1, ncol = 2)
 ggpubr::ggarrange(cons_last_month_sc,ln_cons_last_month_sc, nrow = 1, ncol = 2)
 ggpubr::ggarrange(imp_cons_sc,ln_imp_cons_sc, nrow = 1, ncol = 2)
@@ -807,19 +911,40 @@ ggpubr::ggarrange(forecast_cons_12m_sc,ln_forecast_cons_12m_sc, nrow = 1, ncol =
 
 ```
 
-**Figure: 8 - Transformed Variables Exploration**
+**Figure: 9 - Transformed Variables Exploration**
 
-```{r, echo = FALSE, warning = FALSE, message = FALSE, fig.align="center"}
+```{r, echo = FALSE, warning = FALSE, message = FALSE, fig.align="center",fig.height= 4}
 annotate_figure(transformed_eda,
                 bottom = text_grob("Value", color = "black",
                                    hjust = 8.8, x = 1, size = 11, face = "bold"),
                 left = text_grob("No of Companies", color = "black", rot = 90, face = "bold",size = 11))
 ```
 
-**Figure 9 - Correlation Matrix**
+**Figure 10 - Correlation Matrix**
 
-```{r correlation_matrix_chart,echo = FALSE, warning = FALSE, message = FALSE, fig.height=10,fig.width=10, fig.align="center"}
+```{r correlation_matrix_chart,echo = FALSE, warning = FALSE, message = FALSE, fig.height=11,fig.width=11, fig.align="center"}
 cor_matrix + rotate_x_text(angle = 90) + font("xlab", size = 1, color = "black")+
  font("ylab", size = 1, color = "black")
+
+```
+
+**Figure 11 - Probability Distribution**
+
+```{r,echo = FALSE, warning = FALSE, message = FALSE}
+lpm_pred_prob
+
+```
+
+**Figure 12 - ROC Plot**
+
+```{r, ROC,echo = FALSE, warning = FALSE, message = FALSE}
+roc_plot
+
+```
+
+**Figure 13 - ROC Plot XGBoost**
+
+```{r, ROC_XG,echo = FALSE, warning = FALSE, message = FALSE}
+roc_xgb
 
 ```
