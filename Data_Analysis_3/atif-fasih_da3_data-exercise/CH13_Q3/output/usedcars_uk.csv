@@ -1,4 +1,4 @@
-"model","year","price","transmission","mileage","fuelType","tax","mpg","engineSize","eng_1.0","eng_1.2","eng_1.3","age","agesq","agecu","mileagesq"a
+"model","year","price","transmission","mileage","fuelType","tax","mpg","engineSize","eng_1.0","eng_1.2","eng_1.3","age","agesq","agecu","mileagesq"
 "Fiesta",2017,9000,"Manual",13054,"Petrol",145,54.3,1.2,0,0,1,4,16,64,170406916
 "Fiesta",2018,11561,"Manual",18803,"Petrol",145,56.5,1,1,0,0,3,9,27,353552809
 "Fiesta",2019,12500,"Manual",25521,"Petrol",145,55.4,1,1,0,0,2,4,8,651321441
