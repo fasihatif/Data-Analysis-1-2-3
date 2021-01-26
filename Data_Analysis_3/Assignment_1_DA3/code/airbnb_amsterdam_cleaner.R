@@ -44,56 +44,56 @@ data<-cbind(data,as.data.frame(do.call(rbind, lapply(lapply(data$amenities, fact
 data <- data %>% select(-contains(c("]","[")))
 
 
-# Function which merges several columns of same type/category into one generic binary column
+# Function which aggregates several columns of same type/category into one generic binary column. For example, several TV columns into one generic TV column
 
-dummy_category <- function(word){
+aggregate_columns <- function(word){
   
-  # Subset columns which contains a specific word and save them to anther dataframe. Also select 'id' to use for merge later
-  df_name <- data %>% select(contains(word),"id")
+  # Subset columns which contains a specific word and save them to another dataframe. Also select 'id' to use for merge later
+  new_df <- data %>% select(contains(word),"id")
   
   #Go row by row to see if any of the rows have a 1. If it does, populate new column 'col_name' with 1
-  df_name$col_name <- apply(df_name[0:ncol(df_name)], 1, function(x) ifelse(any(x == 1), '1', '0'))
+  new_df$col_name <- apply(new_df[0:ncol(new_df)], 1, function(x) ifelse(any(x == 1), '1', '0'))
   
   # Save new column and id column to another dataframe. We use this new dataframe to merge with original dataframe
-  df_name_merge <- df_name %>% select(id,col_name)
+  new_df_merge <- new_df %>% select(id,col_name)
   
-  #merge original dataframe and df_name_merge by 'id'
-  data <- merge(data,df_name_merge,by = "id", all = FALSE)
+  #merge original dataframe and new_df_merge by 'id'
+  data <- merge(data,new_df_merge,by = "id", all = FALSE)
   
-  #remove the new column and 'id' column from the df_name dataframe
-  df_name <- df_name %>% select(-c(id,col_name))
+  #remove the new column and 'id' column from the new_df dataframe
+  new_df <- new_df %>% select(-c(id,col_name))
   
-  # Remove the selected columns from original dataframe since they have already been aggragated into a new column and merged
-  data <<- data %>% select(-colnames(df_name))
+  # Remove the selected columns from original dataframe since they have already been aggregated into a new column and merged
+  data <<- data %>% select(-colnames(new_df))
 }
 
 # checkpoint
 df_backup <- data
 data <- df_backup
 
-### Updated dummy_category code
+### Updated aggregate_columns code
 # Combine all sound system columns into 1 column.There are several different kinds of sound systems present.We would like to
 # create one generic sound category.
 
-dummy_category("sound")
+aggregate_columns("sound")
 data <- data %>% rename("sound_system" = col_name)
 
-dummy_category("stove")
+aggregate_columns("stove")
 data <- data %>% rename("stove_gas_or_elect" = col_name)
 
-dummy_category("Wifi")
+aggregate_columns("Wifi")
 data <- data %>% rename("wifi" = col_name)
 
-dummy_category("TV")
+aggregate_columns("TV")
 data <- data %>% rename("tv" = col_name)
 
-dummy_category("oven")
+aggregate_columns("oven")
 data <- data %>% rename("oven" = col_name)
 
-dummy_category("refrigerator")
+aggregate_columns("refrigerator")
 data <- data %>% rename("refrigerator" = col_name)
 
-dummy_category("Paid parking")
+aggregate_columns("Paid parking")
 data <- data %>% rename("paid_parking" = col_name)
 
 data_out <- "C:/Users/abc/OneDrive/Business_Analytics/Data-Analysis-1-2-3/Data_Analysis_3/Assignment_1_DA3/data/"
