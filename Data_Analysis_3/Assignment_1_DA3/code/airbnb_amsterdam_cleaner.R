@@ -44,7 +44,7 @@ data<-cbind(data,as.data.frame(do.call(rbind, lapply(lapply(data$amenities, fact
 data <- data %>% select(-contains(c("]","[")))
 
 
-# Function which merges several columns of same type into one generic binary column
+# Function which merges several columns of same type/category into one generic binary column
 
 dummy_category <- function(word,df_name,df_name_merge){
   df_name <- data %>% select(contains(word),"id")
@@ -62,7 +62,7 @@ data <- df_backup
 # Combine all sound system columns into 1 column.There are several different kinds of sound systems present.We would like to
 # create one generic sound category.
 
-dummy_category("sound",sound_system, sound_df,sound_df_merge)
+dummy_category("sound", sound_df,sound_df_merge)
 data <- data %>% rename("sound_system" = col_name)
 
 dummy_category("stove",stove_df,stove_df_merge)
