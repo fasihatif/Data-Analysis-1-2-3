@@ -83,10 +83,5 @@ data <- data %>% rename("refrigerator" = col_name)
 dummy_category("Paid parking",paid_park_df,paid_park_df_merge)
 data <- data %>% rename("paid_parking" = col_name)
 
-data$`  bluetooth connection for you to connect your Spotify sound system with Bluetooth and aux`
-drops <- c("amenities","translation missing: en.hosting_amenity_49",
-           "translation missing: en.hosting_amenity_50")
-data<-data[ , !(names(data) %in% drops)]
-
 data_out <- "C:/Users/abc/OneDrive/Business_Analytics/Data-Analysis-1-2-3/Data_Analysis_3/Assignment_1_DA3/data/"
 write.csv(data,file=paste0(data_out,"amsterdam_amenties.csv"), row.names = FALSE)
