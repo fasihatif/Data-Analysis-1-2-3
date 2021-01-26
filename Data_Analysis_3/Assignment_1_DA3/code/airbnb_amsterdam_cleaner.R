@@ -18,6 +18,12 @@ data <- data %>% select(-c("listing_url","scrape_id","last_scraped","name","desc
                            "calendar_last_scraped","number_of_reviews_ltm","number_of_reviews_l30d","license","reviews_per_month",
                            "availability_30","availability_60","availability_90","availability_365","neighbourhood","has_availability"))
 
+data <- data %>% select(-`  bluetooth connection for you to connect your Spotify sound system with Bluetooth and aux`)
+data <- data %>% select(-contains("conditioner"))
+data <- data %>% select(-contains("soap"))
+data <- data %>% select(-contains("portable"))
+data <- data %>% select(-contains("Self-parking"))
+data <- data %>% select(-contains("shampoo"))
 
 #remove dollar signs from price variable
 data$price<-gsub("\\$","",as.character(data$price))
@@ -37,14 +43,8 @@ data<-cbind(data,as.data.frame(do.call(rbind, lapply(lapply(data$amenities, fact
 
 data <- data %>% select(-contains(c("]","[")))
 
-# Combine all sound system columns into 1 column.There are several different kinds of sound systems present.We would like to
-# create one generic sound category.
-data <- data %>% select(-`  bluetooth connection for you to connect your Spotify sound system with Bluetooth and aux`)
-data <- data %>% select(-contains("conditioner"))
-data <- data %>% select(-contains("soap"))
-data <- data %>% select(-contains("portable"))
-data <- data %>% select(-contains("Self-parking"))
-data <- data %>% select(-contains("shampoo"))
+
+# Function which merges several columns of same type into one generic binary column
 
 dummy_category <- function(word,df_name,df_name_merge){
   df_name <- data %>% select(contains(word),"id")
@@ -55,9 +55,13 @@ dummy_category <- function(word,df_name,df_name_merge){
   data <<- data %>% select(-colnames(df_name))
 }
 
-
+# checkpoint
 df_backup <- data
 data <- df_backup
+
+# Combine all sound system columns into 1 column.There are several different kinds of sound systems present.We would like to
+# create one generic sound category.
+
 dummy_category("sound",sound_system, sound_df,sound_df_merge)
 data <- data %>% rename("sound_system" = col_name)
 
