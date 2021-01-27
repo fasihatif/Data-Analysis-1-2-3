@@ -24,4 +24,4 @@ aggregate_columns <- function(word){
 # Make sure to rename the new binary column everytime you run the function.
 
 # aggregate_columns("stove")
-# data <- data %>% rename("stove_gas_or_elect" = col_name)
+# data <- data %>% rename("stove_gas_or_elect" = col_namea
