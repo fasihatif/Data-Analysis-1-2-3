@@ -26,6 +26,7 @@ for( word in column_names){
   # Remove the subset columns from original dataframe since they have already been aggregated into a new column and merged
   data <- data %>% select(-colnames(new_df))
   
+  # Rename the new column
   names(data)[names(data) == 'col_name'] <- paste0(word,"_agg")
   
 }
