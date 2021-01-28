@@ -24,7 +24,8 @@ aggregate_columns <- function(word){
   data$col_name <- as.integer(data$col_name)
   
   # Remove the subset columns from original dataframe since they have already been aggregated into a new column and merged
-  data <<- data %>% select(-colnames(new_df))
+  data <- data %>% select(-colnames(new_df))
+  return(data)
 }
 
 #### Use Case ####
