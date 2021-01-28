@@ -1,5 +1,5 @@
 # For-loop version of below function:
-# Faster and renames as the new column as well. All you need to do is pass a vector of words once.
+# Faster and renames the new column as well. All you need to do is pass a vector of words once.
 # https://github.com/fasihatif/Data-Analysis-1-2-3/blob/master/Data_Analysis_3/functions/for_loop_aggregate_columns.R
 
 
