@@ -15,6 +15,9 @@ aggregate_columns <- function(word){
   #remove the new column and 'id' column from the new_df dataframe
   new_df <- new_df %>% select(-c(id,col_name))
   
+  # Convert new column from character to integer
+  data$col_name <- as.integer(data$col_name)
+  
   # Remove the subset columns from original dataframe since they have already been aggregated into a new column and merged
   data <<- data %>% select(-colnames(new_df))
 }
@@ -24,4 +27,7 @@ aggregate_columns <- function(word){
 # Make sure to rename the new binary column everytime you run the function.
 
 # aggregate_columns("stove")
-# data <- data %>% rename("stove_gas_or_elect" = col_namea
+# data <- data %>% rename("stove_gas_or_elect" = col_name)
+
+
+
