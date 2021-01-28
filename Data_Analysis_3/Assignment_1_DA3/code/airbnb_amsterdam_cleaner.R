@@ -41,8 +41,14 @@ data<-cbind(data,as.data.frame(do.call(rbind, lapply(lapply(data$amenities, fact
 
 # data <- data %>% select(-contains(c("]","[")))
 
+#Checkpoint
 aggregate_backup <- data
 data <- aggregate_backup
+
+### Updated aggregate_columns function code ###
+# Combine all sound system columns into 1 column.There are several different kinds of sound systems present.We would like to
+# create one generic sound category.
+
   
 column_names <- c("stove","Wifi","TV","oven","frige","Paid parking", "soap","shampoo","Self-parking","washer","toiletries","conditioner")
 
@@ -70,6 +76,7 @@ for( word in column_names){
   
 }
 
+# Function version
 aggregate_columns("sound")
 data <- data %>% rename("sound_system" = col_name)
 data$sound_system <- as.integer(data$sound_system)
