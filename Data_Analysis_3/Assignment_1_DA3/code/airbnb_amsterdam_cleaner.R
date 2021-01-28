@@ -46,10 +46,10 @@ aggregate_backup <- data
 data <- aggregate_backup
 
 ### Updated aggregate_columns function code ###
-# Combine all sound system columns into 1 column.There are several different kinds of sound systems present.We would like to
+# Example: Combine all sound system columns into 1 column.There are several different kinds of sound systems present.We would like to
 # create one generic sound category.
 
-  
+# Pass a vector of phrases to make the process quicker
 column_names <- c("stove","Wifi","TV","oven","frige","Paid parking", "soap","shampoo","Self-parking","washer","toiletries","conditioner")
 
 for( word in column_names){
