@@ -54,7 +54,6 @@ data <- backup_a
 
 #-------------------------------------------------------------------------------
 
-
 # data <- data %>% select(-c("Amazon Video Prime", "Mini fridge", "and wardrobe","Changing table","Children\u2019s books and toys",
 # "Children\u2019s dinnerware","Complimentary self parking", "Free driveway parking on premises \u2013 1 space",
 # "Free parking on premises \u2013 1 space", "Free residential garage on premises", "Radiant heating",
@@ -76,6 +75,9 @@ names(data)[names(data) == "Free_residential_garage_on_premises`"] <- "free_gara
 
 amenities_clean_df <- sapply(data[25:193], function(x){sum(x)})
 amenities_clean_df <- data.frame(amenities_clean_df)
+
+# ------------------------------------------------------------------------------
+
 
 # Pass a vector of phrases to the for loop to make the process quicker
 column_names <- c("stove","Wifi","TV","oven","frige", "soap", "BBQ", "toys", "crib", "parking", "shampoo", "heating","washer","toiletries","conditioner","dry")
