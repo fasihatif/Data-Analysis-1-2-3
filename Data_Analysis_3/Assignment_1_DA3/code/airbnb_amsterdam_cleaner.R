@@ -4,10 +4,13 @@ library(data.table)
 library(stringr)  
 library(fastDummies)
 
+#-------------------------------------------------------------------------------
+
 
 listings = read.csv("https://raw.githubusercontent.com/fasihatif/Data-Analysis-1-2-3/master/Data_Analysis_3/Assignment_1_DA3/data/listing.csv")
 data <- listings
 glimpse(data)
+
 ###################
 #  Data Cleaning  #
 ###################
@@ -48,6 +51,8 @@ names(data) <- gsub('^_','',names(data))
 #Checkpoint 1: Initial column cleaning
 backup_a <- data
 data <- backup_a
+
+#-------------------------------------------------------------------------------
 
 
 # data <- data %>% select(-c("Amazon Video Prime", "Mini fridge", "and wardrobe","Changing table","Children\u2019s books and toys",
@@ -103,6 +108,7 @@ for( word in column_names){
   
 } 
 
+#-------------------------------------------------------------------------------
 # contains_list <- c("breakfast")
 # data <- data %>% select(-contains(contains_list))
 
@@ -140,7 +146,7 @@ names(data)[names(data) == "bathrooms_text"] <- "bathrooms"
 # Remove text from bathrooms column
 data$bathrooms <- as.numeric(gsub(" bath", "", data$bathrooms ))
 
-
+#-------------------------------------------------------------------------------
 
 
 # To-do list
