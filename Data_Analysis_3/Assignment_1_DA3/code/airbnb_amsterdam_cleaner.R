@@ -218,6 +218,8 @@ colnames(data)[nnames_i] <- paste0("n_", numericals)
 data <- data %>%
   select(id,price,neighbourhood,property_type,room_type,matches("^d_.*|^n_.*|^f_.*"))
 
+# ------------------------------------------------------------------------------
+
 # Cleaned data
 data_out <- "C:/Users/abc/OneDrive/Business_Analytics/Data-Analysis-1-2-3/Data_Analysis_3/Assignment_1_DA3/data/"
 write.csv(data,file=paste0(data_out,"amsterdam_clean.csv"), row.names = FALSE)
