@@ -134,5 +134,26 @@ data <- data %>% select(-c("amenities", "Babysitter_recommendations", "Baby_bath
 
 names(data)[names(data) == "frige_agg"] <- "refrigerator"
 
+# To-do list
+# Fix column names
+# Remove extra columns
+
+#############################################################################################################
+#############################################################################################################
+#############################################################################################################
+#############################################################################################################
+
+#Room type as factor
+table(data$room_type)
+data <- data %>%
+  mutate(f_room_type = factor(room_type))
+
+# Rename room type because it is too long
+data$f_room_type2 <- factor(ifelse(data$f_room_type== "Entire home/apt", "Entire/Apt",
+                                   ifelse(data$f_room_type== "Private room", "Private",
+                                          ifelse(data$f_room_type== "Shared room", "Shared", "."))))
+
+
+
 data_out <- "C:/Users/abc/OneDrive/Business_Analytics/Data-Analysis-1-2-3/Data_Analysis_3/Assignment_1_DA3/data/"
 write.csv(data,file=paste0(data_out,"amsterdam_clean_prep.csv"), row.names = FALSE)
