@@ -2,8 +2,9 @@
 library(tidyverse)
 library(data.table)
 library(stringr)  
+library(fastDummies)
 
-# Fix link
+
 listings = read.csv("https://raw.githubusercontent.com/fasihatif/Data-Analysis-1-2-3/master/Data_Analysis_3/Assignment_1_DA3/data/listing.csv")
 data <- listings
 glimpse(data)
@@ -133,6 +134,14 @@ data$price<-as.numeric(as.character(data$price))
 data <- data %>% select(-c("amenities", "Babysitter_recommendations", "Baby_bath", "Baking_sheet"))
 
 names(data)[names(data) == "frige_agg"] <- "refrigerator"
+names(data)[names(data) == "neighbourhood_cleansed"] <- "neighbourhood"
+names(data)[names(data) == "bathrooms_text"] <- "bathrooms"
+
+# Remove text from bathrooms column
+data$bathrooms <- as.numeric(gsub(" bath", "", data$bathrooms ))
+
+
+
 
 # To-do list
 # Fix column names
@@ -143,10 +152,37 @@ names(data)[names(data) == "frige_agg"] <- "refrigerator"
 #############################################################################################################
 #############################################################################################################
 
-#Room type as factor
+backup_c <- data
+data <- backup_c
+
+# ----------------------------------------------------------------
+## Create dummy variables using the fastdummies library
+data <- data %>% dummy_cols(select_columns = "instant_bookable", remove_selected_columns = TRUE)
+data <- data  %>% select(-c("instant_bookable_f"))
+
+# create dummy vars
+dummies <- names(data)[seq(24,84)]
+
+data <- data %>%
+  mutate_at(vars(dummies), funs("d"= (.)))
+
+dnames <- data %>%
+  select(ends_with("_d")) %>%
+  names()
+dnames_i <- match(dnames, colnames(data))
+colnames(data)[dnames_i] <- paste0("d_", tolower(gsub("[^[:alnum:]_]", "",dummies)))
+
+# ------------------------------------------------------------------------------
+
+# Convert room type to factor
 table(data$room_type)
 data <- data %>%
   mutate(f_room_type = factor(room_type))
+
+# Convert neighbourhood_cleansed to factors
+data <- data %>%
+  mutate(
+    f_neighbourhood = factor(neighbourhood))
 
 # Rename room type because it is too long
 data$f_room_type2 <- factor(ifelse(data$f_room_type== "Entire home/apt", "Entire/Apt",
@@ -154,6 +190,26 @@ data$f_room_type2 <- factor(ifelse(data$f_room_type== "Entire home/apt", "Entire
                                           ifelse(data$f_room_type== "Shared room", "Shared", "."))))
 
 
+# ------------------------------------------------------------------------------
 
+# add new numeric columns from certain columns
+numericals <- c("accommodates","bathrooms", "bedrooms", "beds","minimum_nights", "number_of_reviews", "review_scores_rating")
+data <- data %>%
+  mutate_at(vars(numericals), funs("n"=as.numeric))
+
+# rename columns so they start with n_ as opposed to end with _n
+nnames <- data %>%
+  select(ends_with("_n")) %>%
+  names()
+nnames_i <- match(nnames, colnames(data))
+colnames(data)[nnames_i] <- paste0("n_", numericals)
+
+#-------------------------------------------------------------------------------
+
+# keep columns if contain d_, n_,f_, p_, usd_ and some others
+data <- data %>%
+  select(id,price,neighbourhood,property_type,room_type,matches("^d_.*|^n_.*|^f_.*"))
+
+# Cleaned data
 data_out <- "C:/Users/abc/OneDrive/Business_Analytics/Data-Analysis-1-2-3/Data_Analysis_3/Assignment_1_DA3/data/"
-write.csv(data,file=paste0(data_out,"amsterdam_clean_prep.csv"), row.names = FALSE)
+write.csv(data,file=paste0(data_out,"amsterdam_clean.csv"), row.names = FALSE)
