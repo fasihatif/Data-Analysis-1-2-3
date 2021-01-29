@@ -3,19 +3,24 @@ library(tidyverse)
 library(data.table)
 library(stringr)  
 library(fastDummies)
+library(ggpubr)
+library(scales)
 
-#-------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
 
+# Import data
 
 listings = read.csv("https://raw.githubusercontent.com/fasihatif/Data-Analysis-1-2-3/master/Data_Analysis_3/Assignment_1_DA3/data/listing.csv")
 data <- listings
 glimpse(data)
 
-###################
-#  Data Cleaning  #
-###################
+#########################
+## FEATURE ENGINEERING ##
+#########################
 
-# Filter for apartments which accomodate 2-6 persons
+# ---------------------------- DATA CLEANING ----------------------------------#
+
+# Filter for apartments which accommodate 2-6 persons
 properties_type <- as.data.frame(table(data$property_type))
 
 data <- data %>%
@@ -31,7 +36,7 @@ data <- data %>% select(-c("listing_url","scrape_id","last_scraped","name","desc
                            "calendar_last_scraped","number_of_reviews_ltm","number_of_reviews_l30d","license","reviews_per_month",
                            "availability_30","availability_60","availability_90","availability_365","neighbourhood","has_availability"))
 
-#amenities
+# Format amenities column. Remove square brackets and convert to vector
 data$amenities<-gsub("\\[","",data$amenities)
 data$amenities<-gsub("\\]","",data$amenities)
 data$amenities<-gsub('\\"',"",data$amenities)
@@ -42,11 +47,12 @@ data <- cbind(data, as.data.frame(do.call(rbind, lapply(lapply(data$amenities, f
                                                         table))))
 
 data <- data %>% select(-(194:243))
-# names(data) <- str_trim(names(data), "left")
-names(data) <- str_replace_all(names(data), " ", "_")
-names(data) <- gsub('^_','',names(data))
 
-# data <- data %>% select(-contains(c("]","[")))
+# Remove all whitespaces from column names
+names(data) <- trimws(names(data))
+
+# Repace all spaces between words with underscores
+names(data) <- str_replace_all(names(data), " ", "_")
 
 #Checkpoint 1: Initial column cleaning
 backup_a <- data
@@ -146,8 +152,8 @@ names(data)[names(data) == "neighbourhood_cleansed"] <- "neighbourhood"
 names(data)[names(data) == "bathrooms_text"] <- "bathrooms"
 
 # Remove text from bathrooms column
-data$bathrooms <- as.numeric(gsub(" bath", "", data$bathrooms ))
-
+table(data$bathrooms)b
+data$bathrooms <- gsub(" baths", "", data$bathrooms )
 #-------------------------------------------------------------------------------
 
 
@@ -218,7 +224,111 @@ colnames(data)[nnames_i] <- paste0("n_", numericals)
 data <- data %>%
   select(id,price,neighbourhood,property_type,room_type,matches("^d_.*|^n_.*|^f_.*"))
 
+# ---------------------------Exploratory Data Analysis ------------------------#
+
+###### Price ######
+
+summary(data$price)
+describe(data$price)
+
+# price boxplot
+boxplot(data$price)
+
+# Take log of price
+data <- data %>%
+  mutate(ln_price = log(price))
+
+
+# Remove extreme values
+data <- data %>%
+  filter(price < 700)
+
+# Price Distribution
+price_hist <- ggplot(data, aes( x = price)) +
+  geom_histogram(aes(y = (..count..)/sum(..count..)),fill = "grey", color = "black") +
+  theme_bw() +
+  scale_y_continuous(labels = label_percent()) +
+  ylab("Percent") + 
+  xlab("Price")
+
+
+ln_price_hist <- ggplot(data, aes( x = ln_price)) +
+  geom_histogram(aes(y = (..count..)/sum(..count..)),fill = "grey", color = "black") +
+  theme_bw() +
+  scale_y_continuous(labels = label_percent()) +
+  ylab("Percent") + 
+  xlab("Price (log)")
+
+price_hist_grid <- ggarrange(
+  price_hist,
+  ln_price_hist,
+  nrow = 1
+)
+
 # ------------------------------------------------------------------------------
+
+###### Accommodates ######
+
+price_hist <- ggplot(data = data, aes(x=n_accommodates, y=price)) +
+  geom_point(size=1, colour= "grey", shape=16)+
+ # ylim(0,800)+
+# xlim(0,15)+
+  labs(x="Number of people accomodated",y="Price")+
+  geom_smooth(method="lm", colour= "red", se=FALSE)+
+  theme_bw()
+
+# Squares and further values to create for accommodation
+dataa <- dataa %>%
+  mutate(n_accommodates2=n_accommodates^2, ln_accommodates=log(n_accommodates))
+
+###### Beds ######
+
+## Beds
+data %>%
+  group_by(n_beds) %>%
+  summarise(mean_price = mean(price), min_price= min(price), max_price = max(price), n = n())
+
+ggplot(data = data, aes(x=n_beds, y=price)) +
+  geom_point(size=1, colour= "grey", shape=16)+
+  # ylim(0,800)+
+  # xlim(0,15)+
+  labs(x="Number of people accomodated",y="Price")+
+  geom_smooth(method="lm", colour= "red", se=FALSE)+
+  theme_bw()
+
+
+# Take logs of beds
+data <- data %>%
+  mutate(ln_beds = log(n_beds))
+
+###### Bathrooms ######
+
+
+ggplot(data, aes()) +
+  geom_histogram(bins = 1) +
+  ylab("") +
+  xlab("N of bathrooms") +
+  theme_bw()
+
+
+
+
+# Number of missing values in each column
+na_count <- sapply(data, function(y) sum(length(which(is.na(y)))))
+na_count <- data.frame(na_count)
+
+# Price, bathrooms, review_scores_rating, n_bedrooms, n_beds columns have missing values
+
+# Since Price has only 16 missing values, we will drop the observations with missing price values
+data <- data %>% 
+  drop_na(price)
+
+# ------------------------------------------------------------------------------
+
+
+
+
+
 
 # Cleaned data
 data_out <- "C:/Users/abc/OneDrive/Business_Analytics/Data-Analysis-1-2-3/Data_Analysis_3/Assignment_1_DA3/data/"
