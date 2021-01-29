@@ -152,10 +152,14 @@ names(data)[names(data) == "neighbourhood_cleansed"] <- "neighbourhood"
 names(data)[names(data) == "bathrooms_text"] <- "bathrooms"
 
 # Remove text from bathrooms column
-table(data$bathrooms)b
-data$bathrooms <- gsub(" baths", "", data$bathrooms )
-#-------------------------------------------------------------------------------
+table(data$bathrooms)
 
+data$bathrooms <- replace(data$bathrooms,data$bathrooms == '1 bath',1)
+data$bathrooms <- replace(data$bathrooms,data$bathrooms == 'Half-bath',0.5)
+data$bathrooms <- gsub("baths", "", data$bathrooms)
+data$bathrooms <- as.numeric(data$bathrooms)
+
+#-------------------------------------------------------------------------------
 
 # To-do list
 # Fix column names
@@ -278,7 +282,7 @@ price_hist <- ggplot(data = data, aes(x=n_accommodates, y=price)) +
   theme_bw()
 
 # Squares and further values to create for accommodation
-dataa <- dataa %>%
+data <- data %>%
   mutate(n_accommodates2=n_accommodates^2, ln_accommodates=log(n_accommodates))
 
 ###### Beds ######
@@ -302,16 +306,69 @@ data <- data %>%
   mutate(ln_beds = log(n_beds))
 
 ###### Bathrooms ######
+table(data$n_bathrooms)
 
-
-ggplot(data, aes()) +
-  geom_histogram(bins = 1) +
+ggplot(data, aes(n_bathrooms)) +
+  geom_histogram(binwidth = 0.5, fill = "grey", color = "black") +
   ylab("") +
   xlab("N of bathrooms") +
   theme_bw()
 
+# Pool accommodations with 0,1,2,10 bathrooms
+
+data <- data %>%
+  mutate(f_bathroom = cut(n_bathrooms, c(0,1,2,5), labels=c(0,1,2), right = F) )
+
+###### Reviews ######
+ggplot(data, aes(n_number_of_reviews)) +
+  geom_histogram(binwidth = 5, fill = "red", color = "white", alpha = 0.8, size = 0.25) +
+  ylab("") +
+  xlab("N of reviews") +
+  theme_bw()
+
+data <- data %>%
+  mutate(ln_number_of_reviews = log(n_number_of_reviews+1))
+
+# Pool num of reviews to 3 categories: none, 1-51 and >51
+data <- data %>%
+  mutate(f_number_of_reviews = cut(n_number_of_reviews, c(0,1,51,max(data$n_number_of_reviews)), labels=c(0,1,2), right = F))
 
 
+ggplot(data, aes(ln_number_of_reviews)) +
+  geom_histogram(binwidth = 0.5, fill = "red", color = "white", alpha = 0.8, size = 0.25) +
+  ylab("") +
+  xlab("Log N of reviews") +
+  theme_bw()
+
+## review score effect
+ggplot(data = data, aes(x=ln_review_scores_rating , y=price)) +
+  geom_point(size=1.5, shape=4) +
+ # ylim(0,800)+
+  #xlim(20,100)+
+  geom_smooth(method="loess", se=F)+
+  labs(x="Review score",y="Daily price (USD)")+
+  theme_bw()
+
+
+# Create log of review scores
+data <- data %>%
+  mutate(ln_review_scores_rating = log(n_review_scores_rating))
+# Regression 1) ln price - num of review scores
+lm(ln_price ~ n_review_scores_rating,data=data)
+# Regression 2) ln price - log num of review scores
+lm(ln_price ~ ln_review_scores_rating,data=data)
+#leave as is
+
+# Pool and categorize the number of minimum nights: 1,2,3, 3+
+
+data <- data %>%
+  mutate(f_minimum_nights= cut(n_minimum_nights, c(1,2,3,max(data$n_minimum_nights)), labels=c(1,2,3), right = F))
+
+
+# Change Infinite values with NaNs
+for (j in 1:ncol(data) ) data.table::set(data, which(is.infinite(data[[j]])), j, NA)
+
+# ------------------------------------------------------------------------------
 
 # Number of missing values in each column
 na_count <- sapply(data, function(y) sum(length(which(is.na(y)))))
@@ -323,12 +380,25 @@ na_count <- data.frame(na_count)
 data <- data %>% 
   drop_na(price)
 
-# ------------------------------------------------------------------------------
 
+# 2. impute when few, not that important
+data <- data %>%
+  mutate(
+    n_bathrooms =  ifelse(is.na(n_bathrooms), median(n_bathrooms, na.rm = T), n_bathrooms), #assume at least 1 bath
+    n_beds = ifelse(is.na(n_beds), n_accommodates, n_beds), #assume n_beds=n_accomodates
+    f_bathroom=ifelse(is.na(f_bathroom),1, f_bathroom),
+    f_minimum_nights=ifelse(is.na(f_minimum_nights),1, f_minimum_nights),
+    f_number_of_reviews=ifelse(is.na(f_number_of_reviews),1, f_number_of_reviews),
+    ln_beds=ifelse(is.na(ln_beds),0, ln_beds),
+    n_bedrooms=ifelse(is.na(n_bedrooms),1, n_bedrooms)
+  )
 
+data <- data %>%
+  mutate(
+    flag_review_scores_rating=ifelse(is.na(n_review_scores_rating),1, 0),
+    n_review_scores_rating =  ifelse(is.na(n_review_scores_rating), median(n_review_scores_rating, na.rm = T), n_review_scores_rating))
 
-
-
+data <- data %>% select(-ln_review_scores_rating)
 
 # Cleaned data
 data_out <- "C:/Users/abc/OneDrive/Business_Analytics/Data-Analysis-1-2-3/Data_Analysis_3/Assignment_1_DA3/data/"
