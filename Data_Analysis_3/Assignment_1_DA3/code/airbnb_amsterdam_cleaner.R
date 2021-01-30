@@ -20,11 +20,10 @@ glimpse(data)
 
 # ---------------------------- DATA CLEANING ----------------------------------#
 
-# Filter for apartments which accommodate 2-6 persons
-properties_type <- as.data.frame(table(data$property_type))
+table(data$property_type)
 
 data <- data %>%
-  filter(property_type %in% c("Entire apartment", "Entire serviced apartment")) %>%
+  filter(property_type %in% c("Entire apartment", "Entire serviced apartment", "Entire home/apt", "Private room in apartment", "Private room in serviced apartment", "Shared room in apartment", "Room in serviced apartment")) %>%
   filter(between(accommodates, 2, 6))
 
 # Drop unnecessary columns
@@ -46,7 +45,7 @@ levs <- levels(factor(unlist(data$amenities)))
 data <- cbind(data, as.data.frame(do.call(rbind, lapply(lapply(data$amenities, factor, levs), 
                                                         table))))
 
-data <- data %>% select(-(194:243))
+data <- data %>% select(-(224:273))
 
 # Remove all whitespaces from column names
 names(data) <- trimws(names(data))
@@ -60,33 +59,27 @@ data <- backup_a
 
 #-------------------------------------------------------------------------------
 
-# data <- data %>% select(-c("Amazon Video Prime", "Mini fridge", "and wardrobe","Changing table","Children\u2019s books and toys",
-# "Children\u2019s dinnerware","Complimentary self parking", "Free driveway parking on premises \u2013 1 space",
-# "Free parking on premises \u2013 1 space", "Free residential garage on premises", "Radiant heating",
-# "Valet parking \u2014 \u20ac35/day","Babysitter recommendations","-`  bluetooth connection for you to connect your Spotify sound system with Bluetooth and aux`",
-# "Luggage store possible ( small fee)// * I wash your dishes. Enjoy holiday!//* My fridge in kitchen","L'Oreal","portable"))
-
-### Updated aggregate_columns function code ###
-# Example: Combine all sound system columns into 1 column.There are several different kinds of sound systems present.We would like to
-# create one generic sound category.
-
 # rename some columns for easier aggregation
 names(data)[names(data) == "Mini_fridge"] <- "Mini_frige"
-names(data)[names(data) == "Nespresso_machine"] <- "Nespresso_coffee_machine"
 names(data)[names(data) == "Shower_gel"] <- "Shower_gel_soap"
 names(data)[names(data) == "Barbecue_utensils"] <- "BBQ_utensils"
 names(data)[names(data) == "Freezer"] <- "Freezer_frige"
-names(data)[names(data) == "Free_residential_garage_on_premises`"] <- "free_garage_parking"
+names(data)[names(data) == "Free_residential_garage_on_premises"] <- "free_garage_parking"
+names(data)[names(data) == "Amazon_Prime_Video"] <- "Amazon_Prime_TV"
 
 
+# To eyeball the column names
 amenities_clean_df <- sapply(data[25:193], function(x){sum(x)})
 amenities_clean_df <- data.frame(amenities_clean_df)
 
 # ------------------------------------------------------------------------------
 
+### Updated aggregate_columns function code ###
+# Example: Combine all sound system columns into 1 column.There are several different kinds of sound systems present.We would like to
+# create one generic sound category.
 
 # Pass a vector of phrases to the for loop to make the process quicker
-column_names <- c("stove","Wifi","TV","oven","frige", "soap", "BBQ", "toys", "crib", "parking", "shampoo", "heating","washer","toiletries","conditioner","dry")
+column_names <- c("sound", "stove","Wifi","TV","oven","frige", "soap", "BBQ", "toys", "crib", "parking", "shampoo", "heating","washer","toiletries","conditioner","dry")
 
 for( word in column_names){
   
@@ -124,21 +117,20 @@ for( word in column_names){
 backup_b <- data
 data <- backup_b
 
-count_df <- sapply(data[25:131], function(x){sum(x)})
+count_df <- sapply(data[25:125], function(x){sum(x)})
 count_df <- data.frame(count_df)
 
 # Subset all ameneties columns and remove any which have '1' less than 5%
-amenities_clean <- data %>% select(25:131, "id")
+amenities_clean <- data %>% select(25:125, "id")
 less_than_5per <- amenities_clean %>% select(where(~mean(. == 1) <= 0.005))
 less_than_5per <- less_than_5per %>% select(-contains(c("id")))
 amenities_clean <- amenities_clean %>% select(-colnames(less_than_5per))
 
 # Check for count
-amenities_clean_df <- sapply(amenities_clean, function(x){sum(x)})
-amenities_clean_df <- data.frame(amenities_clean_df)
+amenities_clean_df <- as.data.frame(sapply(amenities_clean, function(x){sum(x)}))
 
 # Merge the original and amenities dataframe
-data <- data %>% select(-(25:131))
+data <- data %>% select(-(25:125))
 data <- merge(data,amenities_clean, by = "id", all = FALSE)
 
 #remove dollar signs from price variable. These prices are actually Euros
@@ -161,15 +153,6 @@ data$bathrooms <- as.numeric(data$bathrooms)
 
 #-------------------------------------------------------------------------------
 
-# To-do list
-# Fix column names
-# Remove extra columns
-
-#############################################################################################################
-#############################################################################################################
-#############################################################################################################
-#############################################################################################################
-
 backup_c <- data
 data <- backup_c
 
@@ -179,7 +162,7 @@ data <- data %>% dummy_cols(select_columns = "instant_bookable", remove_selected
 data <- data  %>% select(-c("instant_bookable_f"))
 
 # create dummy vars
-dummies <- names(data)[seq(24,84)]
+dummies <- names(data)[seq(24,89)]
 
 data <- data %>%
   mutate_at(vars(dummies), funs("d"= (.)))
@@ -194,6 +177,13 @@ colnames(data)[dnames_i] <- paste0("d_", tolower(gsub("[^[:alnum:]_]", "",dummie
 
 # Convert room type to factor
 table(data$room_type)
+
+# Rename room type
+data$room_type <- replace(data$room_type,data$room_type == 'Entire home/apt', "Entire_apt")
+data$room_type <- replace(data$room_type,data$room_type == 'Hotel room', "Private room")
+data$room_type <- replace(data$room_type,data$room_type == 'Private room', "Private_room")
+data$room_type <- replace(data$room_type,data$room_type == 'Shared room', "Shared_room")
+
 data <- data %>%
   mutate(f_room_type = factor(room_type))
 
@@ -202,10 +192,21 @@ data <- data %>%
   mutate(
     f_neighbourhood = factor(neighbourhood))
 
-# Rename room type because it is too long
-data$f_room_type2 <- factor(ifelse(data$f_room_type== "Entire home/apt", "Entire/Apt",
-                                   ifelse(data$f_room_type== "Private room", "Private",
-                                          ifelse(data$f_room_type== "Shared room", "Shared", "."))))
+
+# Property Type
+table(data$property_type)
+
+data$property_type <- replace(data$property_type,data$property_type == 'Entire apartment', 'Entire_apartment')
+data$property_type <- replace(data$property_type,data$property_type == 'Entire home/apt', 'Entire_apartment')
+data$property_type <- replace(data$property_type,data$property_type == 'Entire serviced apartment', 'Entire_apartment')
+data$property_type <- replace(data$property_type,data$property_type == 'Room in serviced apartment', 'Room_apartment')
+data$property_type <- replace(data$property_type,data$property_type == 'Private room in apartment', 'Room_apartment')
+data$property_type <- replace(data$property_type,data$property_type == 'Private room in serviced apartment', 'Room_apartment')
+data$property_type <- replace(data$property_type,data$property_type == 'Shared room in apartment', 'Room_apartment')
+
+
+data <- data %>%
+  mutate(f_property_type = factor(property_type))
 
 
 # ------------------------------------------------------------------------------
@@ -226,9 +227,12 @@ colnames(data)[nnames_i] <- paste0("n_", numericals)
 
 # keep columns if contain d_, n_,f_, p_, usd_ and some others
 data <- data %>%
-  select(id,price,neighbourhood,property_type,room_type,matches("^d_.*|^n_.*|^f_.*"))
+  select(id,price,matches("^d_.*|^n_.*|^f_.*"))
 
 # ---------------------------Exploratory Data Analysis ------------------------#
+
+backup_d <- data
+data <- backup_d
 
 ###### Price ######
 
@@ -245,7 +249,7 @@ data <- data %>%
 
 # Remove extreme values
 data <- data %>%
-  filter(price < 700)
+  filter(price < 650)
 
 # Price Distribution
 price_hist <- ggplot(data, aes( x = price)) +
@@ -341,7 +345,7 @@ ggplot(data, aes(ln_number_of_reviews)) +
   theme_bw()
 
 ## review score effect
-ggplot(data = data, aes(x=ln_review_scores_rating , y=price)) +
+ggplot(data = data, aes(x=n_review_scores_rating , y=price)) +
   geom_point(size=1.5, shape=4) +
  # ylim(0,800)+
   #xlim(20,100)+
