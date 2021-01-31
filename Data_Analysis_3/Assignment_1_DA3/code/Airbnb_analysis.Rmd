@@ -1,35 +1,45 @@
+---
+title: "amsterdam_predicton"
+author: "Fasih Atif"
+date: "1/30/2021"
+output:
+  html_document:
+    df_print: paged
+  rmarkdown::html_document:
+    theme: tactile
+---
 
+```{r libraries, echo= FALSE, message=FALSE, warning=FALSE}
+# Import libraries
+library(dplyr)
 library(tidyverse)
 library(data.table)
 library(stringr)  
 library(fastDummies)
 library(ggpubr)
 library(scales)
+```
 
-#------------------------------------------------------------------------------
-
+```{r Import data, message=FALSE, warning=FALSE, include=FALSE}
 # Import data
 
-listings = read.csv("https://raw.githubusercontent.com/fasihatif/Data-Analysis-1-2-3/master/Data_Analysis_3/Assignment_1_DA3/data/listing.csv")
+listings <- read.csv("https://raw.githubusercontent.com/fasihatif/Data-Analysis-1-2-3/master/Data_Analysis_3/Assignment_1_DA3/data/raw/listings.csv")
 data <- listings
-glimpse(data)
+```
 
-#########################
-## FEATURE ENGINEERING ##
-#########################
-
-# ---------------------------- DATA CLEANING ----------------------------------#
-
-table(data$property_type)
-
+```{r filter data, echo = FALSE, message=FALSE, warning=FALSE}
+# Filter for apartments which accommodate 2-6 persons
 data <- data %>%
   filter(property_type %in% c("Entire apartment", "Entire serviced apartment", "Entire home/apt", "Private room in apartment", "Private room in serviced apartment", "Shared room in apartment", "Room in serviced apartment")) %>%
   filter(between(accommodates, 2, 6))
 
+```
+
+```{r data cleaning 1, echo = FALSE, message=FALSE, warning=FALSE}
 # Drop unnecessary columns
 data <- data[grep("^host", colnames(data), invert = TRUE)]
 data <- data[grep("^calculated", colnames(data), invert = TRUE)]
-data <- data %>% select(-contains("maximum"))
+data <- data %>% dplyr::select(-contains("maximum"))
 data <- data %>% select(-c("listing_url","scrape_id","last_scraped","name","description","neighborhood_overview","picture_url",
                            "neighbourhood_group_cleansed","bathrooms","minimum_minimum_nights", "minimum_nights_avg_ntm","calendar_updated",
                            "calendar_last_scraped","number_of_reviews_ltm","number_of_reviews_l30d","license","reviews_per_month",
@@ -44,7 +54,6 @@ data$amenities <- as.list(strsplit(data$amenities, ","))
 levs <- levels(factor(unlist(data$amenities)))
 data <- cbind(data, as.data.frame(do.call(rbind, lapply(lapply(data$amenities, factor, levs), 
                                                         table))))
-
 data <- data %>% select(-(224:273))
 
 # Remove all whitespaces from column names
@@ -53,12 +62,15 @@ names(data) <- trimws(names(data))
 # Repace all spaces between words with underscores
 names(data) <- str_replace_all(names(data), " ", "_")
 
+```
+
+```{r checkpoint A, echo = FALSE}
 #Checkpoint 1: Initial column cleaning
 backup_a <- data
 data <- backup_a
+```
 
-#-------------------------------------------------------------------------------
-
+```{r data cleaning 2: amenities split, echo = FALSE}
 # rename some columns for easier aggregation
 names(data)[names(data) == "Mini_fridge"] <- "Mini_frige"
 names(data)[names(data) == "Shower_gel"] <- "Shower_gel_soap"
@@ -109,17 +121,15 @@ for( word in column_names){
   
 } 
 
-#-------------------------------------------------------------------------------
-# contains_list <- c("breakfast")
-# data <- data %>% select(-contains(contains_list))
+```
 
+```{r checkpoint B, echo = FALSE}
 # Checkpoint 2:Subset data further for cleaning
 backup_b <- data
 data <- backup_b
+```
 
-count_df <- sapply(data[25:125], function(x){sum(x)})
-count_df <- data.frame(count_df)
-
+```{r data cleaning 3, echo = FALSE}
 # Subset all ameneties columns and remove any which have '1' less than 5%
 amenities_clean <- data %>% select(25:125, "id")
 less_than_5per <- amenities_clean %>% select(where(~mean(. == 1) <= 0.005))
@@ -151,12 +161,14 @@ data$bathrooms <- replace(data$bathrooms,data$bathrooms == 'Half-bath',0.5)
 data$bathrooms <- gsub("baths", "", data$bathrooms)
 data$bathrooms <- as.numeric(data$bathrooms)
 
-#-------------------------------------------------------------------------------
+```
 
+```{r checkpoint C, echo = FALSE}
 backup_c <- data
 data <- backup_c
+```
 
-# ----------------------------------------------------------------
+```{r data cleaning 4, echo = FALSE}
 ## Create dummy variables using the fastdummies library
 
 ## Create dummy variables using the fastdummies library
@@ -239,7 +251,7 @@ data <- data %>%
 amenities_convert<- data %>%
   select(starts_with("d_"),"id") 
 
-amenities_convert <- amenities_convert %<>% mutate_if(is.integer,as.numeric)
+amenities_convert <- amenities_convert %>%mutate_if(is.integer,as.numeric)
 glimpse(amenities_convert)
 
 data <- data %>%
@@ -248,36 +260,53 @@ data <- data %>%
 data <- merge(data,amenities_convert, by = "id")
 
 data <- data %>% mutate(id = as.numeric(id))
+```
 
-# ---------------------------Exploratory Data Analysis ------------------------#
-
+```{r checkpoint D, echo = FALSE}
 backup_d <- data
 data <- backup_d
+```
 
-###### Price ######
+```{r}
 
-summary(data$price)
-describe(data$price)
+```
 
-# price boxplot
-boxplot(data$price)
+-   Executive summary/abstract
 
-# Take log of price
-data <- data %>%
-  mutate(ln_price = log(price))
+-   Introduction: aim of the analysis, what we can learn and possible other reports/analysis connection.
 
+-   Data: what is your used data, data quality issues, descriptive statistics and graphs and variable transformation.
 
-# Remove extreme values
-data <- data %>%
-  filter(price < 650)
+## **Introduction**
+
+According to [Statistics Netherlands](https://opendata.cbs.nl/#/CBS/en/dataset/83913ENG/table) (CBS), Netherlands' house prices continue to rise strongly, buoyed by record low interest rates, with supply unable to keep up with strong demand. In Q1 2020, prices for apartments rose by 10.9%, to an average of €293,085 (US\$332,404). But many people have been willing to buy the apartments at higher rates due to the possibility of making extra money by renting the apartments out via Airbnb. It has become extremely popular, and lucrative, to rent out a flat or room here on one of the short-stay rental platforms, of which Airbnb is by far the biggest. An estimated 22,000 rooms and flats in the Dutch capital are now [offered for rent this way](https://www.amsterdam.nl/wonen-leefomgeving/wonen/nieuws-wonen/amsterdam-versterkt/#h80fede74-010e-487d-846c-949eb3dcc794) at least once a year. In the most popular neighborhoods, as many as one in six homeowners rent out a room or flat on Airbnb.
+
+EU Heights is an upcoming Realtor who established their business in 2019 in Rotterdam. They have showed significant growth in 2020 and are now looking to expand into the Amsterdam market. With the increase in Airbnb listings in Amsterdam, EU Heights is looking to break into the Airbnb Amsterdam market and make a name for itself in the new city. They have hired me as a Data Science Consultant to study the Amsterdam market and help them with predicting the potential prices to keep for their rental apartments. I have to keep in mind the different neighborhoods of the city as well as the amenities provided in the apartment which can potentially affect the rental price.
+
+## Data
+
+*Data: what is your used data, data quality issues, descriptive statistics and graphs and variable
+transformation.*
+
+For this task, I have used the Airbnb data for Amsterdam that is available on [Inside Airbnb](www.insideairbnb.com) website. The dataset has a single table that includes 18522 observations. The data refers to rental prices for one night in December 2020. The target variable is price per night per person in Euros. The explanatory variables consist of several variables related to property reviews, host info and ratings, neighborhood etc.
+
+Data Quality
+
+Data Cleaning
+
+### Descriptive Statistics
+
+The two histograms below show the distribution of price and log price:
+
+```{r price distribution, echo = FALSE, message = FALSE, warnin = FALSE}
 
 # Price Distribution
 price_hist <- ggplot(data, aes( x = price)) +
-  geom_histogram(aes(y = (..count..)/sum(..count..)),fill = "grey", color = "black") +
+  geom_histogram(aes(y = (..count..)/sum(..count..)),fill = "cyan3", color = "black") +
   theme_bw() +
   scale_y_continuous(labels = label_percent()) +
   ylab("Percent") + 
-  xlab("Price")
+  xlab("Price (Euros)")
 
 
 ln_price_hist <- ggplot(data, aes( x = ln_price)) +
@@ -285,146 +314,48 @@ ln_price_hist <- ggplot(data, aes( x = ln_price)) +
   theme_bw() +
   scale_y_continuous(labels = label_percent()) +
   ylab("Percent") + 
-  xlab("Price (log)")
+  xlab("ln(Price, Euros)")
 
 price_hist_grid <- ggarrange(
   price_hist,
   ln_price_hist,
-  nrow = 1
-)
+  nrow = 1)
 
-# ------------------------------------------------------------------------------
+annotate_figure(price_hist_grid,bottom = text_grob("Note: Apartments with 2-6 accommodation capacity. Histogram without extreme values (price < 750 Euros) 
+                                                   Data source: Inside Airbnb dataset, Amsterdam, Dec 2020", color = "black",vjust = 0.5,hjust = 1, x = 1, face = "italic", size = 10))
 
-###### Accommodates ######
+```
 
-price_hist <- ggplot(data = data, aes(x=n_accommodates, y=price)) +
-  geom_point(size=1, colour= "grey", shape=16)+
- # ylim(0,800)+
-# xlim(0,15)+
-  labs(x="Number of people accomodated",y="Price")+
-  geom_smooth(method="lm", colour= "red", se=FALSE)+
+The distribution of Airbnb apartment prices is strongly skewed with a right long tail while the log of price is normally distributed. We will take the log of price in our prediction analysis.
+
+The box plots below show that entire apartments on average cost more that private and shared rooms. The price of shared rooms on average is similar to that of private room but has a lot of variation partly due to less observations in the data. Similarly, the average price of apartments rises as the capacity to accommodate people rises.
+
+```{r room type vs price , echo = FALSE, message = FALSE, warnin = FALSE}
+
+# Room Type
+room_type_box <- data %>% filter(price < 750) %>% ggplot(aes(x = f_room_type, y = price)) +
+  stat_boxplot(aes(group = f_room_type), geom = "errorbar", width = 0.3,
+               na.rm=T) +
+  geom_boxplot(aes(group = f_room_type),
+               size = 0.5, width = 0.6,  fill = c("cyan3","brown2", "mediumslateblue"),alpha = 0.3, na.rm=T, outlier.shape = NA) +
+  scale_y_continuous(expand = c(0.01,0.01),limits = c(0,300), breaks = seq(0,300,100)) +
+  labs(x = "Room type",y = "Price (Euros)")+
   theme_bw()
 
-# Squares and further values to create for accommodation
-data <- data %>%
-  mutate(n_accommodates2=n_accommodates^2, ln_accommodates=log(n_accommodates))
+prop_with_accomm_box <- data %>% filter(price < 750) %>% ggplot(aes(x = factor(n_accommodates), y = price,
+                        fill = f_property_type, color= f_property_type)) +
+  geom_boxplot(alpha=0.8, na.rm=T, outlier.shape = NA, width = 0.8) +
+ stat_boxplot(geom = "errorbar", width = 0.8, size = 0.3, na.rm=T)+
+  labs(x = "Accomodates (Persons)",y = "Price (Euros)") +
+  scale_y_continuous(expand = c(0.01,0.01), limits=c(0, 400), breaks = seq(0,400, 50)) +
+  theme_bw() + theme(legend.position = c(0.15,0.9)) + theme(legend.title = element_blank())
 
-###### Beds ######
+price_prop_type <- ggarrange(
+  room_type_box,
+  prop_with_accomm_box,
+  nrow = 1)
 
-## Beds
-data %>%
-  group_by(n_beds) %>%
-  summarise(mean_price = mean(price), min_price= min(price), max_price = max(price), n = n())
+annotate_figure(price_prop_type,bottom = text_grob("Note: Box plots for price, graphs dont show extreme values
+                                                   Data source: Inside Airbnb dataset, Amsterdam, Dec 2020", color = "black",vjust = 0.5,hjust = 1, x = 1, face = "italic", size = 10))
 
-ggplot(data = data, aes(x=n_beds, y=price)) +
-  geom_point(size=1, colour= "grey", shape=16)+
-  # ylim(0,800)+
-  # xlim(0,15)+
-  labs(x="Number of people accomodated",y="Price")+
-  geom_smooth(method="lm", colour= "red", se=FALSE)+
-  theme_bw()
-
-
-# Take logs of beds
-data <- data %>%
-  mutate(ln_beds = log(n_beds))
-
-###### Bathrooms ######
-table(data$n_bathrooms)
-
-ggplot(data, aes(n_bathrooms)) +
-  geom_histogram(binwidth = 0.5, fill = "grey", color = "black") +
-  ylab("") +
-  xlab("N of bathrooms") +
-  theme_bw()
-
-# Pool accommodations with 0,1,2,10 bathrooms
-
-data <- data %>%
-  mutate(f_bathroom = cut(n_bathrooms, c(0,1,2,5), labels=c(0,1,2), right = F) )
-
-###### Reviews ######
-ggplot(data, aes(n_number_of_reviews)) +
-  geom_histogram(binwidth = 5, fill = "red", color = "white", alpha = 0.8, size = 0.25) +
-  ylab("") +
-  xlab("N of reviews") +
-  theme_bw()
-
-data <- data %>%
-  mutate(ln_number_of_reviews = log(n_number_of_reviews+1))
-
-# Pool num of reviews to 3 categories: none, 1-51 and >51
-data <- data %>%
-  mutate(f_number_of_reviews = cut(n_number_of_reviews, c(0,1,51,max(data$n_number_of_reviews)), labels=c(0,1,2), right = F))
-
-
-ggplot(data, aes(ln_number_of_reviews)) +
-  geom_histogram(binwidth = 0.5, fill = "red", color = "white", alpha = 0.8, size = 0.25) +
-  ylab("") +
-  xlab("Log N of reviews") +
-  theme_bw()
-
-## review score effect
-ggplot(data = data, aes(x=n_review_scores_rating , y=price)) +
-  geom_point(size=1.5, shape=4) +
- # ylim(0,800)+
-  #xlim(20,100)+
-  geom_smooth(method="loess", se=F)+
-  labs(x="Review score",y="Daily price (USD)")+
-  theme_bw()
-
-
-# Create log of review scores
-data <- data %>%
-  mutate(ln_review_scores_rating = log(n_review_scores_rating))
-# Regression 1) ln price - num of review scores
-lm(ln_price ~ n_review_scores_rating,data=data)
-# Regression 2) ln price - log num of review scores
-lm(ln_price ~ ln_review_scores_rating,data=data)
-#leave as is
-
-# Pool and categorize the number of minimum nights: 1,2,3, 3+
-
-data <- data %>%
-  mutate(f_minimum_nights= cut(n_minimum_nights, c(1,2,3,max(data$n_minimum_nights)), labels=c(1,2,3), right = F))
-
-
-# Change Infinite values with NaNs
-for (j in 1:ncol(data) ) data.table::set(data, which(is.infinite(data[[j]])), j, NA)
-
-# ------------------------------------------------------------------------------
-
-# Number of missing values in each column
-na_count <- sapply(data, function(y) sum(length(which(is.na(y)))))
-na_count <- data.frame(na_count)
-
-# Price, bathrooms, review_scores_rating, n_bedrooms, n_beds columns have missing values
-
-# Since Price has only 16 missing values, we will drop the observations with missing price values
-data <- data %>% 
-  drop_na(price)
-
-
-# 2. impute when few, not that important
-data <- data %>%
-  mutate(
-    n_bathrooms =  ifelse(is.na(n_bathrooms), median(n_bathrooms, na.rm = T), n_bathrooms), #assume at least 1 bath
-    n_beds = ifelse(is.na(n_beds), n_accommodates, n_beds), #assume n_beds=n_accomodates
-    f_bathroom=ifelse(is.na(f_bathroom),1, f_bathroom),
-    f_minimum_nights=ifelse(is.na(f_minimum_nights),1, f_minimum_nights),
-    f_number_of_reviews=ifelse(is.na(f_number_of_reviews),1, f_number_of_reviews),
-    ln_beds=ifelse(is.na(ln_beds),0, ln_beds),
-    n_bedrooms=ifelse(is.na(n_bedrooms),1, n_bedrooms)
-  )
-
-data <- data %>%
-  mutate(
-    flag_review_scores_rating=ifelse(is.na(n_review_scores_rating),1, 0),
-    n_review_scores_rating =  ifelse(is.na(n_review_scores_rating), median(n_review_scores_rating, na.rm = T), n_review_scores_rating))
-
-data <- data %>% select(-ln_review_scores_rating)
-data <- data %>% select(-d_luggage_store_possible__small_fee__i_wash_your_dishes_enjoy_holiday_my_fridge_in_kitchen)
-
-# Cleaned data
-data_out <- "C:/Users/abc/OneDrive/Business_Analytics/Data-Analysis-1-2-3/Data_Analysis_3/Assignment_1_DA3/data/"
-write.csv(data,file=paste0(data_out,"amsterdam_clean.csv"), row.names = FALSE)
+```

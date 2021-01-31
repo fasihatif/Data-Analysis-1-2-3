@@ -23,6 +23,8 @@ for( word in column_names){
   #remove the new column and 'id' column from the new_df dataframe
   new_df <- new_df %>% select(-c(id,col_name))
   
+  data$col_name <- as.numeric(data$col_name)
+  
   # Remove the subset columns from original dataframe since they have already been aggregated into a new column and merged
   data <- data %>% select(-colnames(new_df))
   
