@@ -229,6 +229,20 @@ colnames(data)[nnames_i] <- paste0("n_", numericals)
 data <- data %>%
   select(id,price,matches("^d_.*|^n_.*|^f_.*"))
 
+
+amenities_convert<- data %>%
+  select(starts_with("d_"),"id") 
+
+amenities_convert <- amenities_convert %<>% mutate_if(is.integer,as.numeric)
+glimpse(amenities_convert)
+
+data <- data %>%
+  select(-starts_with("d_")) 
+
+data <- merge(data,amenities_convert, by = "id")
+
+data <- data %>% mutate(id = as.numeric(id))
+
 # ---------------------------Exploratory Data Analysis ------------------------#
 
 backup_d <- data
