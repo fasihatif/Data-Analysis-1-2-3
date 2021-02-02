@@ -1,16 +1,17 @@
 
-library(tidyverse)
 library(data.table)
 library(stringr)  
 library(fastDummies)
 library(ggpubr)
 library(scales)
+library(tidyverse)
+library(dplyr)
 
 #------------------------------------------------------------------------------
 
 # Import data
 
-listings = read.csv("https://raw.githubusercontent.com/fasihatif/Data-Analysis-1-2-3/master/Data_Analysis_3/Assignment_1_DA3/data/listing.csv")
+listings = read.csv("https://raw.githubusercontent.com/fasihatif/Data-Analysis-1-2-3/master/Data_Analysis_3/Assignment_1_DA3/data/raw/listings.csv")
 data <- listings
 glimpse(data)
 
@@ -66,11 +67,6 @@ names(data)[names(data) == "Barbecue_utensils"] <- "BBQ_utensils"
 names(data)[names(data) == "Freezer"] <- "Freezer_frige"
 names(data)[names(data) == "Free_residential_garage_on_premises"] <- "free_garage_parking"
 names(data)[names(data) == "Amazon_Prime_Video"] <- "Amazon_Prime_TV"
-
-
-# To eyeball the column names
-amenities_clean_df <- sapply(data[25:193], function(x){sum(x)})
-amenities_clean_df <- data.frame(amenities_clean_df)
 
 # ------------------------------------------------------------------------------
 
@@ -140,7 +136,6 @@ data$price<-as.numeric(as.character(data$price))
 data <- data %>% select(-c("amenities", "Babysitter_recommendations", "Baby_bath", "Baking_sheet"))
 
 names(data)[names(data) == "frige_agg"] <- "refrigerator"
-names(data)[names(data) == "neighbourhood_cleansed"] <- "neighbourhood"
 names(data)[names(data) == "bathrooms_text"] <- "bathrooms"
 
 # Remove text from bathrooms column
@@ -151,6 +146,7 @@ data$bathrooms <- replace(data$bathrooms,data$bathrooms == 'Half-bath',0.5)
 data$bathrooms <- gsub("baths", "", data$bathrooms)
 data$bathrooms <- as.numeric(data$bathrooms)
 
+data <- data %>% select(-d_luggage_store_possible__small_fee__i_wash_your_dishes_enjoy_holiday_my_fridge_in_kitchen)
 #-------------------------------------------------------------------------------
 
 backup_c <- data
@@ -170,6 +166,7 @@ data$instant_bookable <- replace(data$instant_bookable,data$instant_bookable == 
 # create dummy vars
 dummies <- names(data)[seq(23,89)]
 
+colnames(data)
 data <- data %>%
   mutate_at(vars(dummies), funs("d"= (.)))
 
@@ -193,10 +190,36 @@ data$room_type <- replace(data$room_type,data$room_type == 'Shared room', "Share
 data <- data %>%
   mutate(f_room_type = factor(room_type))
 
+
+# Rename neighborhoods
+data$neighbourhood_cleansed <- replace(data$neighbourhood_cleansed,data$neighbourhood_cleansed == 'Bijlmer-Centrum', "Zuidoost")
+data$neighbourhood_cleansed <- replace(data$neighbourhood_cleansed,data$neighbourhood_cleansed == 'Bijlmer-Oost', "Zuidoost")
+data$neighbourhood_cleansed <- replace(data$neighbourhood_cleansed,data$neighbourhood_cleansed == 'Bos en Lommer', "West")
+data$neighbourhood_cleansed <- replace(data$neighbourhood_cleansed,data$neighbourhood_cleansed == 'Buitenveldert - Zuidas', "Zuid")
+data$neighbourhood_cleansed <- replace(data$neighbourhood_cleansed,data$neighbourhood_cleansed == 'Centrum-Oost', "Centre")
+data$neighbourhood_cleansed <- replace(data$neighbourhood_cleansed,data$neighbourhood_cleansed == 'Centrum-West', "Centre")
+data$neighbourhood_cleansed <- replace(data$neighbourhood_cleansed,data$neighbourhood_cleansed == 'De Aker - Nieuw Sloten', "Nieuw-West")
+data$neighbourhood_cleansed <- replace(data$neighbourhood_cleansed,data$neighbourhood_cleansed == 'De Baarsjes - Oud-West', "West")
+data$neighbourhood_cleansed <- replace(data$neighbourhood_cleansed,data$neighbourhood_cleansed == 'De Pijp - Rivierenbuurt', "Zuid")
+data$neighbourhood_cleansed <- replace(data$neighbourhood_cleansed,data$neighbourhood_cleansed == 'Gaasperdam - Driemond', "Zuidoost")
+data$neighbourhood_cleansed <- replace(data$neighbourhood_cleansed,data$neighbourhood_cleansed == 'Geuzenveld - Slotermeer', "Nieuw-West")
+data$neighbourhood_cleansed <- replace(data$neighbourhood_cleansed,data$neighbourhood_cleansed == 'IJburg - Zeeburgereiland', "Oost")
+data$neighbourhood_cleansed <- replace(data$neighbourhood_cleansed,data$neighbourhood_cleansed == 'Noord-Oost', "Noord")
+data$neighbourhood_cleansed <- replace(data$neighbourhood_cleansed,data$neighbourhood_cleansed == 'Noord-West', "Noord")
+data$neighbourhood_cleansed <- replace(data$neighbourhood_cleansed,data$neighbourhood_cleansed == 'Oostelijk Havengebied - Indische Buurt', "Oost")
+data$neighbourhood_cleansed <- replace(data$neighbourhood_cleansed,data$neighbourhood_cleansed == 'Osdorp', "Nieuw-West")
+data$neighbourhood_cleansed <- replace(data$neighbourhood_cleansed,data$neighbourhood_cleansed == 'Oud-Noord', "Noord")
+data$neighbourhood_cleansed <- replace(data$neighbourhood_cleansed,data$neighbourhood_cleansed == 'Oud-Oost', "Oost")
+data$neighbourhood_cleansed <- replace(data$neighbourhood_cleansed,data$neighbourhood_cleansed == 'Slotervaart', "Nieuw-West")
+data$neighbourhood_cleansed <- replace(data$neighbourhood_cleansed,data$neighbourhood_cleansed == 'Watergraafsmeer', "Oost")
+data$neighbourhood_cleansed <- replace(data$neighbourhood_cleansed,data$neighbourhood_cleansed == 'Westerpark', "West")
+data$neighbourhood_cleansed <- replace(data$neighbourhood_cleansed,data$neighbourhood_cleansed == 'Zuid', "Zuid")
+
+
 # Convert neighbourhood_cleansed to factors
 data <- data %>%
   mutate(
-    f_neighbourhood = factor(neighbourhood))
+    f_District = factor(neighbourhood_cleansed))
 
 
 # Property Type
@@ -239,7 +262,7 @@ data <- data %>%
 amenities_convert<- data %>%
   select(starts_with("d_"),"id") 
 
-amenities_convert <- amenities_convert %<>% mutate_if(is.integer,as.numeric)
+amenities_convert <- amenities_convert %>% mutate_if(is.integer,as.numeric)
 glimpse(amenities_convert)
 
 data <- data %>%
@@ -265,7 +288,6 @@ boxplot(data$price)
 # Take log of price
 data <- data %>%
   mutate(ln_price = log(price))
-
 
 # Remove extreme values
 data <- data %>%
@@ -297,27 +319,21 @@ price_hist_grid <- ggarrange(
 
 ###### Accommodates ######
 
-price_hist <- ggplot(data = data, aes(x=n_accommodates, y=price)) +
-  geom_point(size=1, colour= "grey", shape=16)+
- # ylim(0,800)+
-# xlim(0,15)+
-  labs(x="Number of people accomodated",y="Price")+
-  geom_smooth(method="lm", colour= "red", se=FALSE)+
-  theme_bw()
-
 # Squares and further values to create for accommodation
 data <- data %>%
   mutate(n_accommodates2=n_accommodates^2, ln_accommodates=log(n_accommodates))
 
-###### Beds ######
-
-## Beds
-data %>%
-  group_by(n_beds) %>%
-  summarise(mean_price = mean(price), min_price= min(price), max_price = max(price), n = n())
-
-ggplot(data = data, aes(x=n_beds, y=price)) +
+price_hist <- ggplot(data = data, aes(x=n_accommodates2, y=ln_price)) +
   geom_point(size=1, colour= "grey", shape=16)+
+ # ylim(0,800)+
+# xlim(0,15)+
+  labs(x="Number of people accomodated",y="Price")+
+  geom_smooth(method="loess", colour= "red", se=FALSE)+
+  theme_bw()
+
+
+ggplot(data = data, aes(x=ln_accommodates)) +
+  geom_histogram()
   # ylim(0,800)+
   # xlim(0,15)+
   labs(x="Number of people accomodated",y="Price")+
@@ -325,15 +341,54 @@ ggplot(data = data, aes(x=n_beds, y=price)) +
   theme_bw()
 
 
+# ---------------------------- Number of Beds ---------------------------------#
+
 # Take logs of beds
 data <- data %>%
-  mutate(ln_beds = log(n_beds))
+  mutate(ln_beds = log(n_beds + 1))
+
+# Plot a non paremetric regression plot
+beds_plot <- ggplot(data = data, aes(x= ln_beds, y=ln_price)) +
+  geom_point(size=1, colour= "grey", shape=16)+
+  labs(x="ln(Number of people accomodated)",y="ln(Price, Euros")+
+  geom_smooth(method="loess", colour= "red", se=FALSE)+
+  theme_bw()
+
+# Plot a histogram to see bed distribution
+beds_hist <- ggplot(data, aes(x = n_beds), fill = "cyan3") + geom_histogram() + theme_bw()
+
+# Plot a residual chart
+
+#fit a regression model
+model_bed <- lm(ln_price ~ n_beds, data = data)
+#get list of residuals 
+res <- resid(model_bed)
+plot(fitted(model_bed), res)
+#add a horizontal line at 0 
+abline(0,0)
+
+# We can also produce a Q-Q plot, which is useful for determining if the residuals follow a normal distribution
+qqnorm(res)
+#add a straight diagonal line to the plot
+qqline(res)
+# Result: Mostly falls along the 45 degree straight line. Points deviate at the end points
+
+# We can also check for residual density plot
+plot(density(res))
+# Result: Looks normally distributed. Two crests on one peak though.
+
+# Overall Analysis for beds: The loess line is somewhat linear with a small curve around 1-2 on x axis. 
+# I have experimented with taking polynomials, logs, log of square but the residual plots, qqplot, and residual density plot remain unchanged.
+# Perhaps logs of beds should suffice although its not exactly linear
+
+# ---------------------------- Number of Beds ---------------------------------#
 
 ###### Bathrooms ######
 table(data$n_bathrooms)
 
-ggplot(data, aes(n_bathrooms)) +
-  geom_histogram(binwidth = 0.5, fill = "grey", color = "black") +
+ggplot(data, aes(x = f_bathroom)) +
+  #geom_histogram(fill = "grey", color = "black") +
+   stat_count(width = 0.5)
   ylab("") +
   xlab("N of bathrooms") +
   theme_bw()
@@ -344,14 +399,15 @@ data <- data %>%
   mutate(f_bathroom = cut(n_bathrooms, c(0,1,2,5), labels=c(0,1,2), right = F) )
 
 ###### Reviews ######
+data <- data %>%
+  mutate(ln_number_of_reviews = log(n_number_of_reviews+1))
+
 ggplot(data, aes(n_number_of_reviews)) +
   geom_histogram(binwidth = 5, fill = "red", color = "white", alpha = 0.8, size = 0.25) +
   ylab("") +
   xlab("N of reviews") +
   theme_bw()
 
-data <- data %>%
-  mutate(ln_number_of_reviews = log(n_number_of_reviews+1))
 
 # Pool num of reviews to 3 categories: none, 1-51 and >51
 data <- data %>%
@@ -372,16 +428,6 @@ ggplot(data = data, aes(x=n_review_scores_rating , y=price)) +
   geom_smooth(method="loess", se=F)+
   labs(x="Review score",y="Daily price (USD)")+
   theme_bw()
-
-
-# Create log of review scores
-data <- data %>%
-  mutate(ln_review_scores_rating = log(n_review_scores_rating))
-# Regression 1) ln price - num of review scores
-lm(ln_price ~ n_review_scores_rating,data=data)
-# Regression 2) ln price - log num of review scores
-lm(ln_price ~ ln_review_scores_rating,data=data)
-#leave as is
 
 # Pool and categorize the number of minimum nights: 1,2,3, 3+
 
@@ -404,8 +450,7 @@ na_count <- data.frame(na_count)
 data <- data %>% 
   drop_na(price)
 
-
-# 2. impute when few, not that important
+# Fill missing values
 data <- data %>%
   mutate(
     n_bathrooms =  ifelse(is.na(n_bathrooms), median(n_bathrooms, na.rm = T), n_bathrooms), #assume at least 1 bath
@@ -422,9 +467,8 @@ data <- data %>%
     flag_review_scores_rating=ifelse(is.na(n_review_scores_rating),1, 0),
     n_review_scores_rating =  ifelse(is.na(n_review_scores_rating), median(n_review_scores_rating, na.rm = T), n_review_scores_rating))
 
-data <- data %>% select(-ln_review_scores_rating)
 data <- data %>% select(-d_luggage_store_possible__small_fee__i_wash_your_dishes_enjoy_holiday_my_fridge_in_kitchen)
 
 # Cleaned data
-data_out <- "C:/Users/abc/OneDrive/Business_Analytics/Data-Analysis-1-2-3/Data_Analysis_3/Assignment_1_DA3/data/"
+data_out <- "C:/Users/abc/OneDrive/Business_Analytics/Data-Analysis-1-2-3/Data_Analysis_3/Assignment_1_DA3/data/clean/"
 write.csv(data,file=paste0(data_out,"amsterdam_clean.csv"), row.names = FALSE)
