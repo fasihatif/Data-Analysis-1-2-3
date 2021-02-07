@@ -86,6 +86,9 @@ data$addresscountryname <- NULL
 
 data <- data[complete.cases(data), ]
 
+data_out <- "C:/Users/abc/OneDrive/Business_Analytics/Data-Analysis-1-2-3/Data_Analysis_3/atif-fasih_da3_data-exercise/CH16-Q5/data/clean/"
+write.csv(data, paste0(data_out, "hotel-europe-clean.csv"))
+
 # -----------------------------------------------------------------------------#
 
 ggplot(data, aes(x = rating_count )) + geom_histogram() + scale_x_continuous(trans = log_trans())

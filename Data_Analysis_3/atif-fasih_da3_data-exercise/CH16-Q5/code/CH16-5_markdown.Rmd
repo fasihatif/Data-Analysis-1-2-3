@@ -1,15 +1,15 @@
 ---
-title: "CH16-5 DATA EXERCISE"
-author: "Fasih Atif"
-date: "2/4/2021"
+title: "<center>CH16-5 DATA EXERCISE<center>"
+author: "<center>Fasih Atif<center>"
+date: "<center>2/4/2021<center>"
 output:
  html_document:
    code_download: true
 ---
 
-Out task was to carry out a hotel price prediction using the random forest model. We used the europe-hotels data set and filtered for hotels and the month of February 2018. Our original data set contained {} observations and {} variables. We had to carry out some necessary data cleaning to mold the data into a shape that we could use for analysis. Since i felt that we had enough observations, i decided to drop rows with missing values which numbered to around 200 approximately. I removed symbols and words for columns which were going to be used in a numeric format. I renamed columns for easier use and understanding, and dropped columns which were of no use to me or had been transformed. I also converted the columns such as country and city into factor variables. After all the data cleaning, my data consisted of {} observations and {} variables.
+The task for this exercise was to carry out a hotel price prediction using the random forest model. We used the 'europe-hotels' data set and filtered for hotels and the month of February 2018. Our original data set contained 149966 observations and 24 variables. We had to carry out some necessary data cleaning to mold the data into a shape that we could use for analysis. Since i felt that we had enough observations, i decided to drop rows with missing values which numbered to around 200 approximately. I removed symbols and words for columns which were going to be used in a numeric format. I renamed columns for easier use and understanding, and dropped columns which were of no use to me or had been transformed. I also converted the columns such as country and city into factor variables. After all the data cleaning, my data consisted of 9390 observations and 17 variables.
 
-```{r import libraries, warning = FALSE, message = FALSE}
+```{r import libraries, include = FALSE, warning = FALSE, message = FALSE}
 # Import libraries
 library(rmdformats)
 library(caret)
@@ -104,9 +104,10 @@ data <- data[complete.cases(data), ]
 
 ```
 
-# Random Forest
+## Random Forest
 
 I setup two equations to be used in our random forest model:
+
 
 ```{r rf_equations, echo = FALSE, warning = FALSE, message = FALSE}
 m1_rf <- "= stars, distance, distance_alter, f_city, f_country"
@@ -129,6 +130,7 @@ model_table_rf %>%
   kable_styling( position = "center")
 
 ```
+
 
 ```{r random forest, include = FALSE, message = FALSE, warning = FALSE}
 
@@ -163,9 +165,9 @@ lm_coeff$rank -1 #4 variables
 # Model tuning for Model RF model 1
 # set tuning
 tune_grid_1 <- expand.grid(
-  .mtry = c(20,22,24,26),
+  .mtry = c(20,22,24),
   .splitrule = "variance",
-  .min.node.size = c(5,10,15,20)
+  .min.node.size = c(5,10,15)
 )
 
 # Train Model 1
@@ -181,8 +183,6 @@ rf_model_1 <- train(
   importance = "impurity"
 )
 
-# mtry = 26, splitrule = variance and min.node.size = 5 RMSE: 91.92
-
 # ----------- RF Model 2----------#
 
 #Calculate no of variables for mtry
@@ -193,9 +193,9 @@ lm_coeff_2$rank -1 #5 variables
 # Model tuning for Model RF model 2
 # set tuning
 tune_grid_2 <- expand.grid(
-  .mtry = c(20,22,24,26),
+  .mtry = c(20,22,24),
   .splitrule = "variance",
-  .min.node.size = c(5,10,15,20)
+  .min.node.size = c(5,10,15)
 )
 
 # Train Model 2
@@ -210,15 +210,14 @@ rf_model_2 <- train(
   importance = "impurity"
 )
 
-# mtry = 26, splitrule = variance and min.node.size = 5 RMSE:89.74
-
 # Predict Holdout RMSE
 rf_holdout_pred <- predict(rf_model_2, data_holdout)
-rf_holdout_rmse <- RMSE(data_holdout$price, rf_holdout_pred) #RMSE:89.28
+rf_holdout_rmse <- RMSE(data_holdout$price, rf_holdout_pred) #RMSE:96.38512
 
 ```
 
-We setup two Random forest models for our two equations. For the first model, we set our number of variables (mtry) as in the range of 22-26 since as a rule of thumb the mtry should be square root of total number of variables (488) in the equation. The minimum end node size was taken as 5,10,15 and 20. The number of bootstrap sample draws was taken as default which is 500. I then ran the model to check which combination of our tuning parameters would give us the lowest RMSE. The results are shown below:
+We setup two Random forest models for our two equations. For the first model, we set our number of variables (mtry) as in the range of 20-24 since as a rule of thumb the mtry should be square root of total number of variables (488) in the equation. The minimum end node size was taken as 5,10, and 15. The number of bootstrap sample draws was taken as default which is 500. I then ran the model to check which combination of our tuning parameters would give us the lowest RMSE. The results are shown below:
+
 
 ```{r rmse combinations, include = FALSE, message = FALSE, warning = FALSE}
 
@@ -245,15 +244,18 @@ rf_tuning_model2_table <- rf_tuning_model2 %>% kbl(caption = "<center><strong>Ra
 
 ```
 
+
 ```{r tuning table 1, echo = FALSE, message = FALSE, warning = FALSE}
 rf_tuning_model1_table
 ```
 
-For the second model, we set our number of variables (mtry) as in the range of 22-26 as well since as a rule of thumb the mtry should be square root of total number of variables (492) in the equation. The minimum end node size was taken as 5,10,15 and 20. The number of bootstrap sample draws was taken as default which is 500. I then ran the model to check which combination of our tuning parameters would give us the lowest RMSE. The results are shown as the following:
+For the second model, we set our number of variables (mtry) as in the range of 20-24 as well since as a rule of thumb the mtry should be square root of total number of variables (492) in the equation. The minimum end node size was taken as 5,10,and 15. The number of bootstrap sample draws was taken as default which is 500. I then ran the model to check which combination of our tuning parameters would give us the lowest RMSE. The results are shown as the following:
+
 
 ```{r tuning table 2, echo = FALSE, message = FALSE, warning = FALSE}
 rf_tuning_model2_table
 ```
+
 
 We split our data into 70% as training set for cross validation and 30% as holdout set. The optimal set of tuning parameters were then used to fit each model to the training data. The models gave the following RMSE on each fold in each model:
 
@@ -283,14 +285,32 @@ model_rf_rmse_table %>% kbl(caption = "<center><strong>RMSE fold results for all
 
 ```
 
-The best model was model 2 which had a training RMSE of 89.74. We used this model on the holdout set to predict prices and got holdout RMSE of 89.28. It means we can expect to make an error of \$89.28 when using our model on the live data on the assumption that the external validity is high.
 
-# Variable Importance
+The best model was model 2 which had a training RMSE of 88.34. We used this model on the holdout set to predict prices and got holdout RMSE of 96.38. It means we can expect to make an error of $96.38 when using our model on the live data on the assumption that the external validity is high.
+
+
+### Variable Importance
 
 In random forests, there can be a lot of trees that are grown in a correlated fashion and each can grow very large. So unlike linear regression coefficients, its not possible to understand the relationship between target and explanatory variables. In its place, we can use a diagnostic tool like Variable Importance charts. We run model 2 on the holdout set and produce the following two Variable Importance charts:
 
+
+**Top 10 Variable Importance**
+
+The top 10 variable importance charts show the top predictors with the largest average MSE reduction. The most important predictors are stars, guest rating, tripadvisor ratings and count etc. 
+
+
 ```{r variable importance top 10, echo = FALSE, warning = FALSE, message = FALSE}
-rf_model_2_var_imp <- importance(rf_model_2$finalModel)/1000
+
+group.importance <- function(rf.obj, groups) {
+  var.imp <- as.matrix(sapply(groups, function(g) {
+    sum(importance(rf.obj)[g], na.rm = TRUE)
+  }))
+  colnames(var.imp) <- "MeanDecreaseGini"
+  return(var.imp)
+}
+
+
+rf_model_2_var_imp <- ranger::importance(rf_model_2$finalModel)/1000
 rf_model_2_var_imp_df <-
   data.frame(varname = names(rf_model_2_var_imp),imp = rf_model_2_var_imp) %>%
   arrange(desc(imp)) %>%
@@ -311,10 +331,13 @@ rf_model_2_var_imp_plot_b <- ggplot(rf_model_2_var_imp_df[1:10,], aes(x=reorder(
   labs(title = "Top 10 Imp Variables")
 
 rf_model_2_var_imp_plot_b
-
 ```
 
-The top 10 variable importance charts show the top predictors with the largest average MSE reduction. The most important predictors are
+
+**Grouped Variable Importance**
+
+In this chart, we have grouped all city variables together. From this chart, the most important predictors for pricing are city, stars, country, rating, and tripadvisor rating count etc.
+
 
 ```{r variable importance grouped, echo = FALSE, warning = FALSE, message = FALSE}
 
