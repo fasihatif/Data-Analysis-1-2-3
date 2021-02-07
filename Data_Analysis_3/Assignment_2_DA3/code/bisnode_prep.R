@@ -8,7 +8,7 @@ data <- cs_bisnode_panel
 
 #0.2 | Filter balance sheet length and years
 #-----------------------------------------------------
-data <- data %>% filter(balsheet_length > 360)
+data <- data %>% filter(balsheet_length > 360) #assuming it as a complete year
 data <- data %>% filter(year == 2013 | year == 2014)
 
 
@@ -20,12 +20,29 @@ data  <- data %>%
 
 
 #0.4 | Take log of sales and sales_mil
-#-----------------------------------------------------
+#---------------------------------------
 data <- data %>%
   mutate(sales = ifelse(sales < 0, 1, sales),
          ln_sales = ifelse(sales > 0, log(sales), 0),
          sales_mil=sales/1000000,
          sales_mil_log = ifelse(sales > 0, log(sales_mil), 0))
+
+data <- data %>%
+  group_by(comp_id) %>%
+  mutate(d1_sales_mil_log = sales_mil_log - Lag(sales_mil_log, 1) ) %>%
+  ungroup()
+
+
+# 0.5 | Replace w 0 for new firms + add dummy to capture it
+#------------------------------------------------------------
+data <- data %>%
+  mutate(age = (year - founded_year) %>%
+           ifelse(. < 0, 0, .),
+         new = as.numeric(age <= 1) %>% #  (age could be 0,1 )
+           ifelse(balsheet_notfullyear == 1, 1, .),
+         d1_sales_mil_log = ifelse(new == 1, 0, d1_sales_mil_log),
+         new = ifelse(is.na(d1_sales_mil_log), 1, new),
+         d1_sales_mil_log = ifelse(is.na(d1_sales_mil_log), 0, d1_sales_mil_log))
 
 
 #0.5 | Filter for status = alive and sales mil > 10 & < 0.001
@@ -177,7 +194,7 @@ data <- data %>%
 
 
 #1.6 | Imputation of some columns
-#---------------------------------------------
+#----------------------------------
 # CEO age
 data <- data %>%
   mutate(ceo_age = year-birth_year,
@@ -193,8 +210,11 @@ data <- data %>%
 
 # number emp, very noisy measure
 data <- data %>%
-  mutate(labor_avg_mod = ifelse(is.na(labor_avg), mean(labor_avg, na.rm = TRUE), labor_avg),
+  dplyr::mutate(labor_avg_mod = ifelse(is.na(labor_avg), mean(labor_avg, na.rm = TRUE), as.numeric(labor_avg)),
          flag_miss_labor_avg = as.numeric(is.na(labor_avg)))
+
+data$labor_avg_mod[is.na(data$labor_avg_mod)]<-mean(data$labor_avg_mod,na.rm=TRUE)
+
 
 data <- data %>%
   select(-labor_avg)
@@ -208,33 +228,6 @@ data <- data %>%
   mutate(comp_growth_f = factor(comp_growth, levels = c(0,1)) %>%
            recode(., `0` = 'slow', `1` = "fast"))
 
-
-
-#1.6 | Sales Change
-#---------------------------------------------
-
-data <- data %>%
-  mutate(sales_mil_log_sq=sales_mil_log^2)
-
-
-ggplot(data = data, aes(x=sales_mil_log, y=as.numeric(comp_growth))) +
-  geom_point(size=2,  shape=20, stroke=2, fill="cyan3", color="black") +
-  geom_smooth(method = "lm", formula = y ~ poly(x,2), color= "red", se = F, size=1)+
-  geom_smooth(method="loess", se=F, color = "green", size=1.5, span=0.9) +
-  labs(x = "sales_mil_log",y = "default") +
-  theme_bw()
-
-
-# lowess
-Hmisc::describe(data$d1_sales_mil_log) # no missing
-
-ggplot(data = data, aes(x=d1_sales_mil_log, y=as.numeric(default))) +
-  geom_point(size=2,  shape=20, stroke=2, fill="blue", color="blue") +
-  geom_smooth(method="loess", se=F, colour="black", size=1.5, span=0.9) +
-  labs(x = "d1_sales_mil_log",y = "default") +
-  theme_bg() +
-  scale_x_continuous(limits = c(-6,10), breaks = seq(-5,10, 5))
-
 # generate variables ---------------------------------------------------
 
 data <- data %>%
@@ -244,6 +237,11 @@ data <- data %>%
                                        ifelse(d1_sales_mil_log > 1.5, 1.5, d1_sales_mil_log)),
          d1_sales_mil_log_mod_sq = d1_sales_mil_log_mod^2
   )
+
+
+
+#1.6 | Sales Change
+#-------------------
 
 # no more imputation, drop obs if key vars missing
 data <- data %>%
@@ -257,17 +255,6 @@ Hmisc::describe(data$age)
 # drop unused factor levels
 data <- data %>%
   mutate_at(vars(colnames(data)[sapply(data, is.factor)]), funs(fct_drop))
-
-ggplot(data = data, aes(x=d1_sales_mil_log_mod, y=as.numeric(comp_growth))) +
-  geom_point(size=2,  shape=20, stroke=2, fill="blue", color="blue") +
-  geom_smooth(method="loess", se=F, colour="black", size=1.5, span=0.9) +
-  labs(x = "d1_sales_mil_log",y = "default") +
-  theme_bw() +
-  scale_x_continuous(limits = c(-1.5,1.5), breaks = seq(-1.5,1.5, 0.5))
-
-
-summary(data$labor_avg)
-ggplot(data, aes(x = labor_avg)) + geom_histogram()
 
 na_count <- sapply(data, function(y) sum(length(which(is.na(y)))))
 na_count <- data.frame(na_count)
