@@ -1,10 +1,8 @@
+
+
+# Import libraries
 library(tidyverse)
-
-#0.1 | Import data
-#------------------
-bisnode_data <- read_csv('https://raw.githubusercontent.com/fasihatif/Data-Analysis-1-2-3/master/Data_Analysis_3/Assignment_2_DA3/data/bisnode_2016.csv')
 data <- cs_bisnode_panel
-
 
 #0.2 | Filter balance sheet length and years
 #-----------------------------------------------------
@@ -29,7 +27,7 @@ data <- data %>%
 
 data <- data %>%
   group_by(comp_id) %>%
-  mutate(d1_sales_mil_log = sales_mil_log - Lag(sales_mil_log, 1) ) %>%
+  mutate(d1_sales_mil_log = sales_mil_log - lag(sales_mil_log, 1) ) %>%
   ungroup()
 
 
@@ -69,7 +67,7 @@ data <- data %>% mutate(pct_change = (ln_sales - lag(ln_sales))/lag(ln_sales))
 #---------------------------
 data <- data %>%
   filter(year == 2014)
-         
+
 
 #0.9 | Drop unnecessary columns
 #-------------------------------
@@ -211,7 +209,7 @@ data <- data %>%
 # number emp, very noisy measure
 data <- data %>%
   dplyr::mutate(labor_avg_mod = ifelse(is.na(labor_avg), mean(labor_avg, na.rm = TRUE), as.numeric(labor_avg)),
-         flag_miss_labor_avg = as.numeric(is.na(labor_avg)))
+                flag_miss_labor_avg = as.numeric(is.na(labor_avg)))
 
 data$labor_avg_mod[is.na(data$labor_avg_mod)]<-mean(data$labor_avg_mod,na.rm=TRUE)
 
@@ -227,6 +225,9 @@ data <- data %>%
 data <- data %>%
   mutate(comp_growth_f = factor(comp_growth, levels = c(0,1)) %>%
            recode(., `0` = 'slow', `1` = "fast"))
+
+data <- data %>%
+  mutate(sales_mil_log_sq=sales_mil_log^2)
 
 # generate variables ---------------------------------------------------
 
@@ -256,5 +257,24 @@ Hmisc::describe(data$age)
 data <- data %>%
   mutate_at(vars(colnames(data)[sapply(data, is.factor)]), funs(fct_drop))
 
+
+write_csv(data,paste0(data_out,"bisnode_firms_clean.csv"))
+write_rds(data,paste0(data_out,"bisnode_firms_clean.rds"))
+
+
 na_count <- sapply(data, function(y) sum(length(which(is.na(y)))))
 na_count <- data.frame(na_count)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
