@@ -311,7 +311,7 @@ data <- backup_d
 
 # Executive Summary
 
-In this project, I was tasked to predict the prices for apartments that a company would like to use when launching new properties. I was specifically tasked to predict for apartments which can accommodate 2-6 people. I used 3 machine learning algorithms like OLS Linear regression, lasso, and Random Forest. I used RMSE as the loss function to measure performance fit of the models.
+In this project, I was tasked to predict the prices for apartments that a company would like to use when launching new properties. I was specifically tasked to predict for apartments which can accommodate 2-6 people. I used 3 machine learning algorithms like OLS Linear regression, lasso, and Random Forest. I used RMSE as the loss function to measure performance fit of the models. Lasso provided the best results followed by OLS Regression.
 
 # Introduction
 
@@ -457,7 +457,6 @@ beds_plot <- ggplot(data = data, aes(x= ln_beds, y=price)) +
 beds_plot
 
 ```
-
 
 To double check, we also tried to plot a q-q plot which showed that residual points were on the linear line in the center but tend to deviate on the end points. We tried taking other functional forms but the results didnt improve. We looked at the distribution of other quantitative variables as well and decided to pool some of observations in columns into groups. We pooled the columns of 'n_minimum_nights', n_number_of_reviews', 'n_number_of_bathrooms' etc.We imputed missing values based on the type of object it represents. For example, we filled '1' in missing values in 'n_bedroom' column since any apartment is bound to have at least 1 bedroom. Similarly, for 'n_beds', we took the number of accommodation capacity of that apartment as the number to impute for missing values.
 
@@ -652,9 +651,9 @@ After cleaning and filtering our data, we were left with 13521 observations. Fro
 
 ## OLS Linear Regression
 
-First we trained and tested all the regression models using all the observations in the work set (train + test sets) and calculated the R-squared and BIC. Then we again ran the regression models via 5 fold cross validation to calculate the train RMSE and test RMSE on the five training and test sets. RMSE stands for Root Mean Squared Error (MSE) and is the square root of the average Mean Square Error which is the sum of squared residuals. The R-squared keeps improving as we add more predictor variables into the models. Model 3 which contains all the individual variables as well as interaction variables gives an R-square of 0.39 which means the that this model explains 39% of the variation in prices. Meanwhile, Model 2 provided the lowest BIC of the 3 models (lower values of BIC indicate better performance.
+First we trained and tested all the regression models using all the observations in the work set (train + test sets) and calculated the R-squared and BIC. Then we again ran the regression models via 5 fold cross validation to calculate the train RMSE and test RMSE on the five training and test sets. RMSE stands for Root Mean Squared Error (MSE) and is the square root of the average Mean Square Error which is the sum of squared residuals. The R-squared improves as we add more predictor variables into the models. Model 3 which contains all the individual variables as well as interaction variables gives an R-square of 0.38 which means the that this model explains 38% of the variation in prices. Meanwhile, Model 2 provided the lowest BIC of the 3 models (lower values of BIC indicate better performance).
 
-RMSE in the training set improves slightly as we go from Model 1 to Model (more predictor variables added hence more complexity). Model 3 produces both the lowest RMSE of 59.68 for the test set. This model is just slightly better than what BIC picked which was model 2. The difference is however a minor. When BIC and Cross validation produce conflicting results, we should prefer to side with the cross validation results since its not based on auxiliary assumptions. The difference between the fit measures is extremely minor so we wont be making a huge mistake if we were to pick model 2 over model 3.
+RMSE in the training set improves slightly as we go from Model 1 to Model 2 but drops on Model 3. Model 3 produces both the lowest RMSE of 59.05 for the test set. This model is just slightly better than what BIC picked which was model 2. The difference is however a minor. When BIC and Cross validation produce conflicting results, we should prefer to side with the cross validation results since its not based on auxiliary assumptions (BEKES, 2021). The difference between the fit measures is extremely minor so we wont be making a huge mistake if we were to pick model 2 over model 3. Model 3 gives us a RMSE of 60.57 on the holdout set.
 
 ```{r model construction,  include = FALSE, warning = FALSE, message = FALSE}
 # Create models in levels models: 1-3
@@ -765,7 +764,7 @@ colnames(model_results) <- column_names
 #### Holdout set predictions
 
 cv_holdout_pred <- predict(cv_model3, data_holdout)
-holdout_rmse <- mean(cv_model3$resample$RMSE) #0.3638667
+holdout_rmse <- mean(cv_model3$resample$RMSE) #60.57
 
 ```
 
@@ -777,11 +776,18 @@ model_results %>%
 
 ```
 
+We also plot the actual price vs predicted plot to see how accurately our model predicted. A lot of our predicted values in the holdout set center around the 45 degree line. If our predicted values were equal to actual values, our points would all lie on the 45 degree line. Hence, our model is over estimating and under estimating at times and needs to be improved.
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+
+ggplot(data_holdout, aes(x = cv_holdout_pred, y = price)) + geom_point()+ labs( x= "Predicted Price, EUR", y = "Actual Price, EUR") + geom_smooth(method=lm, se=FALSE, formula=y~x-1) + theme_bw()
+  
+
+```
 
 ## Lasso
-Lasso is a model that penalizes models for complexity. We assign it a big set of predictors and the model returns with an estimated regression that has fewer coefficients. The missing coefficients are actually penalized adn assigned a value of zero. For the variables that remain, it gives estimated coefficients.We receive a test RMSE of 60.553 which is better than the OLS models.
 
-
+Lasso is a model that penalizes models for complexity. We assign it a big set of predictors and the model returns with an estimated regression that has fewer coefficients. The missing coefficients are actually penalized and assigned a value of zero. For the variables that remain, it gives estimated coefficients.We receive a test RMSE of 60.553 which is better than the OLS models. The algorithm tells us that at lambda 0.25, we achieve the lowest RMSE. We can observed that the variable 'd_dedicatated workspace' was penalized and given a value of 0. Overall out of 105 variables, around 15 were penalized.
 
 ```{r lasso,  include = FALSE, warning = FALSE, message = FALSE}
 
@@ -806,7 +812,7 @@ lasso_model <- caret::train(model4,
                             tuneGrid = tune_grid,
                             na.action=na.exclude)
 
-print(lasso_model$bestTune$lambda) #0.3/62.21 RMSE
+print(lasso_model$bestTune$lambda) #0.25 RMSE
 
 lasso_coeffs <- coef(lasso_model$finalModel, lasso_model$bestTune$lambda) %>%
   as.matrix() %>%
@@ -820,8 +826,11 @@ print(lasso_coeffs)
 lasso_cv_rmse <- lasso_model$results %>%
   filter(lambda == lasso_model$bestTune$lambda) %>%
   dplyr::select(RMSE)
-print(lasso_cv_rmse[1, 1]) #RMSE 60.178
+print(lasso_cv_rmse[1, 1]) #RMSE 60.34
 
+lasso_coeffs %>% kbl(caption = "<center><strong>Lasso Model Coefficients</strong></center>", escape = FALSE) %>%
+  kable_classic(full_width = F, html_font = "Cambria") %>%
+  kable_styling( position = "center")
 
 ```
 
@@ -1185,8 +1194,8 @@ result_3 %>% kbl(caption = "<center><strong>Performance across subsamples</stron
   kable_styling( position = "center")
 ```
 
-
 # Conclusion
+
 I was tasked with finding the prediction prices for rental apartments with 2-6 accommodation capacity. I used my Machine Learning knowledge to design various models and ran them through various Machine Learning algorithms like OLS, Lasso, and Random Forest. We used the Loss function RMSE to measure the performances of the models.The results of the cross validated test RMSE are shown below:
 
 ```{r final results RSME, echo = FALSE, warning = FALSE, message = FALSE}
@@ -1215,10 +1224,15 @@ result_4 %>% kbl(caption = "<center><strong>Horse Race of Models CV RSME</strong
   kable_classic(full_width = F, html_font = "Cambria") %>%
   kable_styling( position = "center")
 ```
-We started off with OLS models of various complexities to see how the RMSE measures across the models. OLS model 2 and 3 performed nearly the same with a mean RMSE of approximately {}. Model 3 with interaction terms was just slightly better.
-We then performed the lasso method on Model 3 which includes the interactions.The lasso model penalized some coefficients and gave us a test RMSE OF 60.553. The bigger model of Random forest with amenities variables added performed better than the model without amenities. All in all, lasso performed the best in terms of the lowest RMSE closely followed by OLS model 2. The holdout set RMSE of lasso is 60.17 EUR. It means we can expect to make an error of 60.17 EUR  when using our model on the live data in the market of Amsterdam on the assumption that the external validity is high.
 
+We started off with OLS models of various complexities to see how the RMSE measures across the models. OLS model 2 and 3 performed nearly the same with a mean RMSE of approximately 59.8. Model 3 with interaction terms was just slightly better. We then performed the lasso method on Model 3 which includes the interactions.The lasso model penalized some coefficients and gave us a test RMSE OF 60.553. The bigger model of Random forest with amenities variables added performed better than the model without amenities. All in all, lasso performed the best in terms of the lowest RMSE closely followed by OLS model 2. The holdout set RMSE of lasso is 60.17 EUR. It means we can expect to make an error of 60.17 EUR when using our model on the live data in the market of Amsterdam on the assumption that the external validity is high.
 
+# References
 
+1.  Opendata.cbs.nl. 2021. CBS Statline. [online] Available at: <https://opendata.cbs.nl/#/CBS/en/dataset/83913ENG/table> [Accessed 31 January 2021].
 
-Link to github:https://github.com/fasihatif/Data-Analysis-1-2-3/tree/master/Data_Analysis_3/Assignment_1_DA3
+2.  BEKES, G., 2021. DATA ANALYSIS FOR BUSINESS, ECONOMICS, AND POLICY. [S.l.]: CAMBRIDGE UNIV PRESS.
+
+Note:
+
+Link to github:<https://github.com/fasihatif/Data-Analysis-1-2-3/tree/master/Data_Analysis_3/Assignment_1_DA3>
